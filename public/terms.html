@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>利用規約 | OSUMU</title>
+
+    <!-- Google Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Maru+Gothic:wght@400;500;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- AOS -->
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: "Zen Maru Gothic", sans-serif;
+        }
+
+        h1,
+        h2,
+        h3 {
+            font-family: "Noto Sans JP", sans-serif;
+        }
+
+        .bg-anim {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 320px;
+            height: 320px;
+            background-image: url("favicon.ico");
+            background-size: contain;
+            background-repeat: no-repeat;
+            opacity: 0.05;
+            pointer-events: none;
+            z-index: -1;
+            animation: float 12s ease-in-out infinite alternate;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translate(0, 0) rotate(0deg);
+            }
+
+            100% {
+                transform: translate(-20px, 20px) rotate(8deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="bg-anim"></div>
+
+    <header class="bg-white py-2 border-bottom" data-aos="fade-down">
+        <nav class="navbar navbar-expand-lg navbar-light bg-white container">
+            <a class="navbar-brand" href="#">
+                <img src="logo.png" alt="ロゴ" style="height:70px;">
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navMenu">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="index.html">ホーム</a></li>
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <!-- 本文 -->
+    <section class="container py-5">
+        <h1 class="mb-4" data-aos="fade-up">利用規約</h1>
+
+        <p data-aos="fade-up">
+            この利用規約（以下、「本規約」）は、OSUMU（以下、「当サイト」）の利用条件を定めるものです。
+            利用者は、本規約に同意した上で当サイトをご利用ください。
+        </p>
+
+        <h3 class="mt-4" data-aos="fade-up">1. 禁止事項</h3>
+        <p data-aos="fade-up">
+            利用者は、以下の行為を行ってはなりません。<br>
+            ・法令または公序良俗に反する行為<br>
+            ・当サイトの運営を妨害する行為<br>
+            ・他者の権利を侵害する行為<br>
+            ・虚偽の情報を送信する行為
+        </p>
+
+        <h3 class="mt-4" data-aos="fade-up">2. 著作権について</h3>
+        <p data-aos="fade-up">
+            当サイトに掲載されている画像・文章・デザインなどの著作権は、
+            当サイト管理者または権利者に帰属します。無断転載・無断利用を禁止します。
+        </p>
+
+        <h3 class="mt-4" data-aos="fade-up">3. 免責事項</h3>
+        <p data-aos="fade-up">
+            当サイトの情報は正確性を保証するものではありません。
+            利用者が当サイトを利用したことにより生じた損害について、
+            当サイトは一切の責任を負いません。
+        </p>
+
+        <h3 class="mt-4" data-aos="fade-up">4. サイトの変更・停止</h3>
+        <p data-aos="fade-up">
+            当サイトは、事前の予告なく内容の変更・停止を行う場合があります。
+        </p>
+
+        <h3 class="mt-4" data-aos="fade-up">5. 利用規約の変更</h3>
+        <p data-aos="fade-up">
+            当サイトは、必要に応じて本規約を変更することがあります。
+        </p>
+
+        <h3 class="mt-4" data-aos="fade-up">6. 準拠法</h3>
+        <p data-aos="fade-up">
+            本規約は日本法に準拠します。
+        </p>
+
+        <p class="mt-4" data-aos="fade-up">制定日：2026年1月30日</p>
+    </section>
+
+    <!-- フッター -->
+    <footer class="bg-dark text-white py-4">
+        <div class="container text-center">
+            <a href="privacy.html" class="text-white-50 me-3">プライバシーポリシー</a>
+            <a href="terms.html" class="text-white-50">利用規約</a>
+            <div class="mt-2"><small>&copy; 2024 OSUMU</small></div>
+        </div>
+    </footer>
+
+    <!-- AOS -->
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>AOS.init({ duration: 800, once: true });</script>
+
+</body>
+
+</html>
