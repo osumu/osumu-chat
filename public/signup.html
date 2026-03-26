@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>サインアップ | OSUMU CHAT</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: #eee;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <section>
+        <div class="container h-100 d-flex justify-content-center align-items-center h-100"
+            style="border-radius: 25px;">
+            <div class="col-lg-12 col-xl-11 card text-black">
+                <div class="card-body p-md-5 row justify-content-center">
+                    <div class="col-md-10 col-lg-6 col-xl-5 order-2 order-lg-1">
+                        <p class="text-center h1 fw-bold mb-5 mx-1 mx-md-4 mt-4">サインイン</p>
+                        <form class="mx-1 mx-md-4">
+                            <div class="d-flex flex-row align-items-center mb-4">
+                                <i class="bi bi-person-circle me-3" style="font-size:25px"></i>
+                                <div data-mdb-input-init class="form-outline flex-fill mb-0">
+                                    <input type="text" id="su_name" class="form-control" placeholder="名前を入力" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-row align-items-center mb-4">
+
+                                <svg class="me-3" xmlns="http://www.w3.org/2000/svg" width="25" height="25"
+                                    fill="currentColor" class="bi bi-lock-fill" viewBox="0 0 16 16">
+                                    <path fill-rule="evenodd"
+                                        d="M8 0a4 4 0 0 1 4 4v2.05a2.5 2.5 0 0 1 2 2.45v5a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 13.5v-5a2.5 2.5 0 0 1 2-2.45V4a4 4 0 0 1 4-4m0 1a3 3 0 0 0-3 3v2h6V4a3 3 0 0 0-3-3" />
+                                </svg>
+                                <div data-mdb-input-init class="form-outline flex-fill mb-0">
+                                    <input type="password" id="su_pass" class="form-control" placeholder="パスワードを入力" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-row align-items-center mb-4">
+                                <i class="bi bi-key me-3" style="font-size:25px"></i>
+                                <div data-mdb-input-init class="form-outline flex-fill mb-0">
+                                    <input type="password" id="su_pass2" class="form-control"
+                                        placeholder="もう一度パスワードを入力" />
+                                </div>
+                            </div>
+
+                            <div class="form-check d-flex justify-content-center mb-5"
+                                style="background-color:#e4e1e1;">
+                                <input class="form-check-input me-2" type="checkbox" value="" id="su_cb" />
+                                <label class="form-check-label" for="form2Example3">
+                                    すべての <a href="terms.html">利用規約</a> に同意します
+                                </label>
+                            </div>
+
+                            <div class="d-flex justify-content-center mx-4 mb-3 mb-lg-4">
+                                <button type="button" data-mdb-button-init data-mdb-ripple-init
+                                    class="btn btn-primary btn-lg" onclick="signup()">サインイン</button>
+                            </div>
+
+                        </form>
+
+                    </div>
+                    <div id="img" class="col-md-10 col-lg-6 col-xl-7 d-flex align-items-center order-1 order-lg-2">
+                        <img src="image.png" class="img-fluid" alt="image" style="width: 1000px">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <script src="app.js"></script>
+</body>
+
+</html>
