@@ -1,5 +1,8 @@
 const sb = supabase.createClient(url(), key());
 
+const { data } = await sb.auth.getSession();
+console.log(data);
+
 let user;
 
 let currentMsgId = null;
