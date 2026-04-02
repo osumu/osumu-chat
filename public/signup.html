@@ -81,6 +81,9 @@
         const sb = supabase.createClient(url(), key());
 
         async function signup() {
+            const { data } = await sb.auth.getSession();
+            console.log(data);
+
             await sb.auth.signUp({
                 email: su_name.value,
                 password: su_pass.value
