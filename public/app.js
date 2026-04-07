@@ -9,7 +9,7 @@ const audio = new Audio("notification.mp3");
 // 初期化
 window.onload = async () => {
     if (!localStorage.getItem("login")) {
-        location.href = "signup.html";
+        location.href = "public/signup.html";
         return;
     }
 
