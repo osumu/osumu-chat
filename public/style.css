@@ -1,33 +1,59 @@
-.hidden {
-    display: none;
+:root {
+    --accent: #28a745;
 }
 
-.full {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: white;
+body {
+    background: #e5ddd5;
 }
 
 .chat-item {
+    display: flex;
     padding: 10px;
     border-bottom: 1px solid #ddd;
+    cursor: pointer;
 }
 
-.bubble {
+.avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: #ccc;
+    margin-right: 10px;
+    background-size: cover;
+}
+
+#messages {
+    height: 60vh;
+    overflow: auto;
     padding: 10px;
-    margin: 5px;
+}
+
+.bubble-me {
+    background: var(--accent);
+    color: #fff;
+    padding: 10px;
     border-radius: 15px;
+    margin: 5px;
+    float: right;
+    max-width: 70%;
 }
 
-.me {
-    background: #06c755;
-    color: white;
-    margin-left: auto;
+.bubble-you {
+    background: #fff;
+    padding: 10px;
+    border-radius: 15px;
+    margin: 5px;
+    float: left;
+    max-width: 70%;
 }
 
-.them {
-    background: white;
+.square {
+    border-radius: 5px !important;
+}
+
+.date {
+    text-align: center;
+    font-size: 12px;
+    margin: 10px 0;
+    color: #666;
 }

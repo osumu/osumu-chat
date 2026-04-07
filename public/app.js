@@ -1,392 +1,324 @@
-const sb = supabase.createClient(url(), key());
+const client = supabase.createClient("https://jhtehnixwtzihaiyvluu.supabase.co", "sb_publishable_VxkEQnw_gXXxHoxHKTQp3Q_41PKWC8x");
 
-const { data } = await sb.auth.getSession();
-console.log(data);
+let user = null;
+let currentRoom = null;
 
-let user;
+// 通知音
+const audio = new Audio("notification.mp3");
 
-let currentMsgId = null;
-
-document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById('#reactionPicker').emojiPicker({
-        width: '300px',
-        height: '200px',
-        onEmojiSelected: function (emoji) {
-            if (currentMsgId) {
-                addReaction(currentMsgId, emoji);
-            }
-            document.getElementById('#reactionPicker').hide();
-        }
-    });
-});
-
-async function init() {
-    const { data } = await sb.auth.getUser();
-    user = data.user;
-
-    if (!user) {
-        location.href = "public/signup.html";
+// 初期化
+window.onload = async () => {
+    if (!localStorage.getItem("login")) {
+        location.href = "/signup.html";
         return;
     }
 
-    await loadMyPIN();   // ← PIN表示
-    await loadChats();   // ← トーク一覧
-    realtime();          // ← リアルタイム開始
+    const { data } = await client.auth.getSession();
+    user = data.session.user;
+
+    await ensureProfile();
+    loadChats();
+    subscribeRealtime();
 }
 
-async function loadChats() {
-    const { data } = await sb
-        .from("room_members")
-        .select("*")
-        .eq("user_id", user.id);
-
-    const list = chatList;
-    list.innerHTML = "";
-
-    if (!data.length) {
-        empty.style.display = "block";
-        return;
+// プロフィール
+async function ensureProfile() {
+    const { data } = await client.from("profiles").select("*").eq("id", user.id).single();
+    if (!data) {
+        const pin = Math.floor(100000 + Math.random() * 900000);
+        await client.from("profiles").insert({
+            id: user.id,
+            name: user.email.split("@")[0],
+            pin
+        });
     }
+}
 
-    empty.style.display = "none";
+// ===== 友達追加 =====
+async function addFriend(pin) {
+    const { data } = await client.from("profiles").select("*").eq("pin", pin).single();
+    if (!data) { alert("見つからない"); return; }
 
-    for (let r of data) {
-        const { data: msgs } = await sb
-            .from("messages")
+    const { data: room } = await client.from("rooms")
+        .insert({ name: data.name, is_group: false })
+        .select().single();
+
+    await client.from("room_members").insert([
+        { room_id: room.id, user_id: user.id },
+        { room_id: room.id, user_id: data.id }
+    ]);
+
+    loadChats();
+}
+
+// ===== グループ作成 =====
+async function createGroup() {
+    const name = prompt("グループ名");
+    if (!name) return;
+
+    const { data: room } = await client.from("rooms")
+        .insert({ name, is_group: true })
+        .select().single();
+
+    await client.from("room_members").insert({
+        room_id: room.id,
+        user_id: user.id
+    });
+
+    alert("作成完了");
+    loadChats();
+}
+
+// ===== チャット一覧 =====
+async function loadChats() {
+    const { data } = await client.from("rooms").select("*");
+
+    let html = "";
+    for (const r of data) {
+        const { data: last } = await client.from("messages")
             .select("*")
-            .eq("room_id", r.room_id)
-            .order("id", { ascending: false })
+            .eq("room_id", r.id)
+            .order("created_at", { ascending: false })
             .limit(1);
 
-        const last = msgs[0];
+        const msg = last?.[0]?.content || "メッセージなし";
+        const time = last?.[0]?.created_at?.slice(0, 10).replaceAll("-", "/") || "";
 
-        const div = document.createElement("div");
-        div.className = "chat-item";
-
-        div.innerHTML = `
-      <div class="avatar"></div>
+        html += `
+    <div class='chat-item' onclick="openRoom('${r.id}','${r.name}')">
+      <div class='avatar'></div>
       <div>
-        <div class="name">${r.room_id}</div>
-        <div class="preview">
-          ${last ? last.text : "まだメッセージなし"}
-        </div>
+        <b>${r.name}</b><br>
+        <small>${msg} ${time}</small>
       </div>
-    `;
-
-        div.onclick = () => openChat(r.room_id);
-
-        list.appendChild(div);
-    }
-}
-
-/* ================= PIN生成 ================= */
-
-function generatePIN() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-/* ================= 自分のPIN取得 ================= */
-
-async function loadMyPIN() {
-
-    const { data } = await sb
-        .from("profiles")
-        .select("pin")
-        .eq("id", user.id)
-        .single();
-
-    if (data?.pin) {
-        myPin.innerText = data.pin;
-        myPinSettings.innerText = data.pin;
-        return;
+    </div>`;
     }
 
-    // なければ生成
-    const pin = generatePIN();
-
-    await sb.from("profiles").upsert({
-        id: user.id,
-        pin: pin
-    });
-
-    myPin.innerText = pin;
-    myPinSettings.innerText = pin;
+    document.getElementById("chatList").innerHTML = html;
 }
 
-async function addByPIN() {
-
-    const pin = pinInput.value;
-
-    if (!pin) {
-        alert("PINを入力してください");
-        return;
-    }
-
-    // 相手検索
-    const { data: target } = await sb
-        .from("profiles")
-        .select("*")
-        .eq("pin", pin)
-        .single();
-
-    if (!target) {
-        alert("ユーザーが見つかりません");
-        return;
-    }
-
-    if (target.id === user.id) {
-        alert("自分は追加できません");
-        return;
-    }
-
-    const roomId = [user.id, target.id].sort().join("_");
-
-    // ルーム作成
-    await sb.from("rooms").upsert({ id: roomId });
-
-    // メンバー追加
-    await sb.from("room_members").upsert([
-        { room_id: roomId, user_id: user.id },
-        { room_id: roomId, user_id: target.id }
-    ]);
-
-    closeAdd();
-    loadChats();
-}
-
-
-
-/* ================= 追加 ================= */
-
-function openAdd() { addModal.classList.remove("hidden"); }
-function closeAdd() { addModal.classList.add("hidden"); }
-
-async function addUser() {
-    const target = pinInput.value;
-
-    const roomId = [user.id, target].sort().join("_");
-
-    await sb.from("rooms").insert({ id: roomId });
-
-    await sb.from("room_members").insert([
-        { room_id: roomId, user_id: user.id },
-        { room_id: roomId, user_id: target }
-    ]);
-
-    closeAdd();
-    loadChats();
-}
-
-/* ================= チャット ================= */
-
-function openChat(roomId) {
-    currentRoom = roomId;
-
-    listPage.classList.add("hidden");
-    chatPage.classList.remove("hidden");
-
-    roomName.innerText = roomId;
-
+// ===== トーク =====
+function openRoom(id, name) {
+    currentRoom = id;
+    document.getElementById("chatUser").innerText = name;
     loadMessages();
-    markRead();
 }
 
-function backList() {
-    chatPage.classList.add("hidden");
-    listPage.classList.remove("hidden");
+// 日付
+function formatDate(d) {
+    return d.slice(0, 10).replaceAll("-", "/");
 }
 
-/* ================= QRスキャン ================= */
-
-let stream = null;
-
-async function openScan() {
-    // 画面切り替え
-    addModal.classList.add("hidden");
-    scanPage.classList.remove("hidden");
-
-    try {
-        // カメラ起動
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment" }
-        });
-
-        const video = document.getElementById("camera");
-        video.srcObject = stream;
-        video.play();
-
-    } catch (e) {
-        alert("カメラが使えません（HTTPSまたは権限を確認してください）");
-    }
-}
-
-function backAdd() {
-    // カメラ停止
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        stream = null;
-    }
-
-    // 画面戻る
-    scanPage.classList.add("hidden");
-    addModal.classList.remove("hidden");
-}
-
-
-/* ================= 設定画面 ================= */
-
-function openSettings() {
-    // チャット画面 → 設定画面
-    chatPage.classList.add("hidden");
-    settingsPage.classList.remove("hidden");
-}
-
-function closeSettings() {
-    // 設定画面 → チャット画面
-    settingsPage.classList.add("hidden");
-    chatPage.classList.remove("hidden");
-}
-
-/* ================= 送信 ================= */
-
-async function send() {
-    const text = msg.value;
-    if (!text) return;
-
-    await sb.from("messages").insert({
-        room_id: currentRoom,
-        sender: user.id,
-        text,
-        read_by: [user.id]
-    });
-
-    msg.value = "";
-}
-
-/* ================= メッセージ取得 ================= */
-
+// メッセージ表示
 async function loadMessages() {
-    const { data } = await sb
-        .from("messages")
+    const { data } = await client.from("messages")
         .select("*")
         .eq("room_id", currentRoom)
-        .order("id");
+        .order("created_at");
 
-    messages.innerHTML = "";
-    lastSender = null;
+    let html = "";
+    let lastDate = "";
+    let lastUser = null;
 
-    data.forEach(m => renderMessage(m));
+    data.forEach(m => {
+        const date = formatDate(m.created_at);
+
+        if (date !== lastDate) {
+            html += `<div class='date'>${date}</div>`;
+            lastDate = date;
+        }
+
+        let cls = m.user_id === user.id ? "bubble-me" : "bubble-you";
+
+        if (lastUser === m.user_id && m.user_id !== user.id) {
+            cls += " square";
+        }
+
+        html += `<div class='${cls}'>${m.content}</div><div style='clear:both'></div>`;
+
+        lastUser = m.user_id;
+    });
+
+    document.getElementById("messages").innerHTML = html;
+
+    markAsRead();
 }
 
-/* ================= 描画 ================= */
-
-function renderMessage(m) {
-
-    const div = document.createElement("div");
-
-    const isMe = m.sender === user.id;
-
-    let cls = isMe ? "me" : "them";
-
-    if (!isMe && lastSender === m.sender) {
-        cls += " square";
-    }
-
-    div.className = "bubble " + cls;
-
-    div.innerHTML = `
-        ${m.text}
-        <div class="reactions">${renderReactions(m.reactions)}</div>
-    `;
-
-    div.onclick = (e) => {
-        currentMsgId = m.id;
-
-        $("#reactionPicker").css({
-            display: "block",
-            left: e.pageX + "px"
-        });
-    };
-
-    messages.appendChild(div);
-
-    lastSender = m.sender;
-}
-
-
-/* ================= 既読 ================= */
-
-async function markRead() {
-
-    const { data } = await sb
-        .from("messages")
+// ===== 既読 =====
+async function markAsRead() {
+    const { data } = await client.from("messages")
         .select("*")
         .eq("room_id", currentRoom);
 
-    for (let m of data) {
-
+    data.forEach(async m => {
         if (!m.read_by?.includes(user.id)) {
-
-            const updated = [...(m.read_by || []), user.id];
-
-            await sb.from("messages")
-                .update({ read_by: updated })
+            await client.from("messages")
+                .update({ read_by: [...(m.read_by || []), user.id] })
                 .eq("id", m.id);
         }
-    }
+    });
 }
 
-async function addReaction(messageId, emoji) {
+// ===== 送信 =====
+async function sendMsg() {
+    let text = document.getElementById("msgInput").value;
+    const file = document.getElementById("fileInput").files[0];
 
-    const { data } = await sb
-        .from("messages")
-        .select("reactions")
-        .eq("id", messageId)
-        .single();
+    let file_url = null;
 
-    let reactions = data?.reactions || {};
-
-    if (!reactions[emoji]) {
-        reactions[emoji] = [];
+    if (file) {
+        const { data } = await client.storage.from("files").upload(Date.now() + file.name, file);
+        file_url = client.storage.from("files").getPublicUrl(data.path).data.publicUrl;
+        text = `<a href='${file_url}' target='_blank'>ファイル</a>`;
     }
 
-    // 同じユーザーが2回押さないように
-    if (!reactions[emoji].includes(user.id)) {
-        reactions[emoji].push(user.id);
-    }
+    await client.from("messages").insert({
+        room_id: currentRoom,
+        user_id: user.id,
+        content: text,
+        file_url,
+        read_by: [user.id]
+    });
 
-    await sb.from("messages")
-        .update({ reactions })
-        .eq("id", messageId);
+    document.getElementById("msgInput").value = "";
+    loadMessages();
 }
 
-/* ================= リアルタイム ================= */
-function renderReactions(reactions) {
-    if (!reactions) return "";
+// ===== リアルタイム + 通知 =====
+function subscribeRealtime() {
+    client.channel("chat")
+        .on("postgres_changes", { event: "INSERT", table: "messages" }, payload => {
 
-    return Object.entries(reactions)
-        .map(([emoji, users]) => {
-            return `<br><br><span>${emoji} ${users.length}</span>`;
-        })
-        .join(" ");
-}
-
-function realtime() {
-
-    sb.channel("chat")
-        .on("postgres_changes", {
-            event: "*",
-            schema: "public",
-            table: "messages"
-        }, payload => {
-
-            if (payload.new.room_id === currentRoom) {
-                loadMessages();
+            // 通知音
+            if (payload.new.user_id !== user.id) {
+                audio.play();
             }
 
+            loadMessages();
             loadChats();
         })
         .subscribe();
 }
 
-init();
+function setBubble(type) {
+    localStorage.setItem("bubble", type);
+    Swal.fire("気泡を変更しました");
+}
+
+function loadIconPicker() {
+    if (window.IconPicker) {
+        new IconPicker("#iconPicker");
+    }
+}
+
+function showDevices() {
+    Swal.fire({
+        title: "接続デバイス",
+        text: "現在ログイン中の端末情報",
+        html: `
+      <ul>
+        <li>この端末（現在）</li>
+      </ul>
+    `
+    });
+}
+
+// ===== 設定 =====
+function openSettings() {
+    Swal.fire({
+        title: "設定",
+        width: "800px",
+        html: `
+    
+    <button class="btn btn-light mb-3" onclick="Swal.close()">
+      <i class="bi bi-arrow-left"></i>
+    </button>
+
+    <h3>設定</h3>
+
+    <hr>
+
+    <p>テーマカラー</p>
+    <select id="theme" class="form-select mb-2">
+      <option value="light">ライト</option>
+      <option value="dark">ダーク</option>
+      <option value="auto">自動</option>
+      <option value="custom">カスタム</option>
+    </select>
+
+    <p>アクセントカラー</p>
+    <input type="text" data-coloris id="accent" class="form-control mb-3">
+
+    <p>背景色 / 壁紙</p>
+    <input type="text" data-coloris id="bgColor" class="form-control mb-2">
+    <input type="file" id="bgImg" class="form-control mb-3">
+
+    <p>メッセージ気泡の形</p>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      ${[1, 2, 3, 4, 5, 6, 7].map(i => `
+        <img src="bubble${i}.png" onclick="setBubble(${i})" style="width:60px;cursor:pointer">
+      `).join("")}
+    </div>
+
+    <p>角丸度</p>
+    <input type="range" id="radius" min="0" max="30" class="form-range mb-3">
+
+    <p>新着メッセージ通知</p>
+    <select id="notify" class="form-select mb-3">
+      <option value="on">オン</option>
+      <option value="off">オフ</option>
+      <option value="silent">サイレント</option>
+    </select>
+
+    <p>メッセージ自動削除</p>
+    <select id="deleteMsg" class="form-select mb-3">
+      <option value="24h">24時間</option>
+      <option value="7d">7日</option>
+      <option value="30d">30日</option>
+      <option value="none">無期限</option>
+    </select>
+
+    <p>表示名</p>
+    <input type="text" id="displayName" class="form-control mb-3">
+
+    <p>アイコン画像</p>
+    <input type="file" id="iconUpload" class="form-control mb-2">
+
+    <div id="iconPicker"></div>
+
+    <button class="btn btn-secondary mt-3" onclick="showDevices()">
+      接続デバイス管理
+    </button>
+
+    <br><br>
+
+    <button class="btn btn-success mt-3" onclick="saveSettings()">
+      保存
+    </button>
+    `
+    });
+
+    loadIconPicker();
+}
+
+async function saveSettings() {
+    const theme = document.getElementById("theme").value;
+    const accent = document.getElementById("accent").value;
+    const bgColor = document.getElementById("bgColor").value;
+    const radius = document.getElementById("radius").value;
+    const notify = document.getElementById("notify").value;
+    const deleteMsg = document.getElementById("deleteMsg").value;
+    const displayName = document.getElementById("displayName").value;
+
+    localStorage.setItem("theme", theme);
+    localStorage.setItem("accent", accent);
+    localStorage.setItem("bgColor", bgColor);
+    localStorage.setItem("radius", radius);
+    localStorage.setItem("notify", notify);
+    localStorage.setItem("deleteMsg", deleteMsg);
+    localStorage.setItem("displayName", displayName);
+
+    document.documentElement.style.setProperty("--accent", accent);
+
+    Swal.fire("保存完了");
+}

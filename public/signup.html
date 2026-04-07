@@ -55,8 +55,8 @@
                         </div>
 
                         <div class="form-check d-flex justify-content-center mb-5" style="background-color:#e4e1e1;">
-                            <input class="form-check-input me-2" type="checkbox" value="" />
-                            <label class="form-check-label" for="form2Example3">
+                            <input class="form-check-input me-2" type="checkbox" value="" id="su_cb" />
+                            <label class="form-check-label">
                                 すべての <a href="terms.html">利用規約</a> に同意します
                             </label>
                         </div>
@@ -75,23 +75,6 @@
             </div>
         </div>
     </section>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="supabase.js"></script>
-    <script>
-        const sb = supabase.createClient(url(), key());
-
-        async function signup() {
-            const { data } = await sb.auth.getSession();
-            console.log(data);
-
-            await sb.auth.signUp({
-                email: su_name.value,
-                password: su_pass.value
-            });
-
-            location.href = "../index.html";
-        }
-    </script>
 </body>
 
 </html>
