@@ -9,7 +9,7 @@ const audio = new Audio("notification.mp3");
 // 初期化
 window.onload = async () => {
     if (!localStorage.getItem("login")) {
-        location.href = "/signup.html";
+        location.href = "signup.html";
         return;
     }
 
@@ -23,13 +23,18 @@ window.onload = async () => {
 
 // プロフィール
 async function ensureProfile() {
-    const { data } = await client.from("profiles").select("*").eq("id", user.id).single();
+    const username = localStorage.getItem("username");
+
+    const { data } = await client.from("profiles")
+        .select("*")
+        .eq("username", username)
+        .single();
+
     if (!data) {
-        const pin = Math.floor(100000 + Math.random() * 900000);
         await client.from("profiles").insert({
             id: user.id,
-            name: user.email.split("@")[0],
-            pin
+            username,
+            name: username
         });
     }
 }

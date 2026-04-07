@@ -75,6 +75,51 @@
             </div>
         </div>
     </section>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script>
+        const client = supabase.createClient("YOUR_URL", "YOUR_KEY");
+
+        async function signup() {
+            const name = document.getElementById("su_name").value;
+            const pass = document.getElementById("su_pass").value;
+            const pass2 = document.getElementById("su_pass2").value;
+            const cb = document.getElementById("su_cb").checked;
+
+            if (pass !== pass2) {
+                Swal.fire({
+                    title: "エラー",
+                    text: "パスワード不一致",
+                    icon: "error"
+                });
+                return;
+            }
+            if (!cb) {
+                Swal.fire({
+                    title: "利用規約",
+                    html: `<p class="mb-0">利用規約に同意してください</p><br><button class="btn btn-link" onclick="window.location.href='terms.html';">利用規約</button>`,
+                    icon: "error"
+                });
+                return;
+            }
+
+            const email = name + "@user.localhost";
+
+            const { error } = await client.auth.signUp({
+                email,
+                password: pass
+            });
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            localStorage.setItem("login", true);
+            localStorage.setItem("username", name);
+
+            location.href = "../index.html";
+        }
+    </script>
 </body>
 
 </html>
