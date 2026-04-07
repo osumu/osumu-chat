@@ -76,8 +76,9 @@
         </div>
     </section>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        const client = supabase.createClient("YOUR_URL", "YOUR_KEY");
+        const client = supabase.createClient("https://jhtehnixwtzihaiyvluu.supabase.co", "sb_publishable_VxkEQnw_gXXxHoxHKTQp3Q_41PKWC8x");
 
         async function signup() {
             const name = document.getElementById("su_name").value;
@@ -85,9 +86,17 @@
             const pass2 = document.getElementById("su_pass2").value;
             const cb = document.getElementById("su_cb").checked;
 
+            if (!name || !pass || !pass2) {
+                Swal.fire({
+                    title: "未入力",
+                    text: "入力してください",
+                    icon: "error"
+                });
+                return;
+            }
             if (pass !== pass2) {
                 Swal.fire({
-                    title: "エラー",
+                    title: "不一致",
                     text: "パスワード不一致",
                     icon: "error"
                 });
@@ -110,7 +119,11 @@
             });
 
             if (error) {
-                alert(error.message);
+                Swal.fire({
+                    title: "エラー",
+                    html: error.message,
+                    icon: "error"
+                });
                 return;
             }
 
