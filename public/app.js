@@ -3,7 +3,6 @@ const client = supabase.createClient("https://rruxpquxtdyzhhcrurlj.supabase.co",
 let user = null;
 let currentRoom = null;
 
-// 通知音
 const audio = new Audio("./public/notification.mp3");
 
 // 初期化
