@@ -7,15 +7,17 @@ const audio = new Audio("./public/notification.mp3");
 
 // 初期化
 window.onload = async () => {
-    if (!localStorage.getItem("login")) {
-        location.href = "public/signup.html";
+    const { data, error } = await client.auth.getSession();
+
+    if (!data.session) {
+        location.href = "public/login.html";
         return;
     }
 
-    const { data } = await client.auth.getSession();
     user = data.session.user;
 
     await ensureProfile();
+    await checkInvite();
     loadChats();
     subscribeMessages();
 }
