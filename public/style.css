@@ -57,3 +57,25 @@ body {
     margin: 10px 0;
     color: #666;
 }
+
+.meta {
+    font-size: 10px;
+    color: gray;
+    text-align: right;
+}
+
+.chat-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #ccc;
+}
