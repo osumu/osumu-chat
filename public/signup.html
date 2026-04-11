@@ -77,34 +77,30 @@
     </section>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="data:text/javascript;base64,KCgpID0+IHsKICB3aW5kb3cuY2xpZW50ID0gc3VwYWJhc2UuY3JlYXRlQ2xpZW50KCJodHRwczovL3JydXhwcXV4dGR5emhoY3J1cmxqLnN1cGFiYXNlLmNvIiwgInNiX3B1Ymxpc2hhYmxlX2RpT0lQbnlFaTFWVTFSRTh4ZUtwQndfNmFza1A1LUEiKTsKfSkoKQ=="></script>
+    <script
+        src="data:text/javascript;base64,KCgpID0+IHsKICB3aW5kb3cuY2xpZW50ID0gc3VwYWJhc2UuY3JlYXRlQ2xpZW50KCJodHRwczovL3JydXhwcXV4dGR5emhoY3J1cmxqLnN1cGFiYXNlLmNvIiwgInNiX3B1Ymxpc2hhYmxlX2RpT0lQbnlFaTFWVTFSRTh4ZUtwQndfNmFza1A1LUEiKTsKfSkoKQ=="></script>
     <script>
         async function signup() {
-            const name = document.getElementById("su_name").value;
+
+            const name = document.getElementById("su_name").value.trim();
             const pass = document.getElementById("su_pass").value;
             const pass2 = document.getElementById("su_pass2").value;
             const cb = document.getElementById("su_cb").checked;
 
             if (!name || !pass || !pass2) {
-                Swal.fire({
-                    title: "未入力",
-                    text: "入力してください",
-                    icon: "error"
-                });
+                Swal.fire("未入力", "入力してください", "error");
                 return;
             }
+
             if (pass !== pass2) {
-                Swal.fire({
-                    title: "不一致",
-                    text: "パスワード不一致",
-                    icon: "error"
-                });
+                Swal.fire("不一致", "パスワード不一致", "error");
                 return;
             }
+
             if (!cb) {
                 Swal.fire({
                     title: "利用規約",
-                    html: `<p class="mb-0">利用規約に同意してください</p><br><button class="btn btn-link" onclick="window.location.href='terms.html';">利用規約</button>`,
+                    html: `利用規約に同意してください<br><button class="btn btn-link" onclick="location.href='terms.html'">利用規約</button>`,
                     icon: "error"
                 });
                 return;
@@ -112,24 +108,49 @@
 
             const email = name + "@user.localhost";
 
-            const { error } = await client.auth.signUp({
+            // ===== サインアップ =====
+            const { data, error } = await client.auth.signUp({
                 email,
                 password: pass
             });
 
             if (error) {
-                Swal.fire({
-                    title: "エラー",
-                    html: error.message,
-                    icon: "error"
-                });
+                Swal.fire("エラー", error.message, "error");
                 return;
             }
 
-            localStorage.setItem("login", true);
+            const user = data.user;
+
+            // ===== PIN生成 =====
+            const pin = String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
+
+            // ===== profiles登録 =====
+            await client.from("profiles").insert({
+                id: user.id,
+                username: name,
+                name: name,
+                pin: pin
+            });
+
+            // ===== 保存 =====
             localStorage.setItem("username", name);
 
-            location.href = "../index.html";
+            // ===== PIN表示 =====
+            Swal.fire({
+                title: "登録完了",
+                html: `
+            登録が完了しました！<br><br>
+            <b>あなたのPIN</b><br>
+            <h2 style="color:green">${pin}</h2>
+            <button class="btn btn-primary mt-2" onclick="navigator.clipboard.writeText('${pin}')">
+              コピー
+            </button>
+            <small>重要な情報です。これがないとチャットができません。<strong>必ず</strong>どこかにメモしておいてください。</small>
+        `,
+                icon: "success"
+            }).then(() => {
+                location.href = "login.html";
+            });
         }
     </script>
 </body>

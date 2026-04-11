@@ -26,9 +26,6 @@ window.onload = async () => {
     subscribeMessages();
 };
 
-// ===============================
-// 日付
-// ===============================
 function formatDate(date) {
     const d = new Date(date);
     return d.getFullYear().toString().slice(2) + "/" +
@@ -38,11 +35,7 @@ function formatDate(date) {
         d.getMinutes().toString().padStart(2, "0");
 }
 
-// ===============================
-// プロフィール生成
-// ===============================
 async function ensureProfile() {
-
     const username = localStorage.getItem("username");
 
     const { data } = await client
@@ -52,14 +45,10 @@ async function ensureProfile() {
         .single();
 
     if (!data) {
-
-        const pin = Math.floor(100000 + Math.random() * 900000);
-
         await client.from("profiles").insert({
             id: user.id,
             username,
-            name: username,
-            pin
+            name: username
         });
     }
 }
