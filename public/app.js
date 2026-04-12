@@ -6,15 +6,11 @@ let currentRoom = null;
 // 通知音
 const audio = new Audio("public/notification.mp3");
 
-// ===============================
-// 起動処理
-// ===============================
 window.onload = async () => {
-
     const { data } = await client.auth.getSession();
 
     if (!data.session) {
-        location.href = "public/login.html";
+        location.href = "public/signup.html";
         return;
     }
 
