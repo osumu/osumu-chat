@@ -1,4 +1,4 @@
-const client = supabase.createClient("https://rruxpquxtdyzhhcrurlj.supabase.co", "sb_publishable_diOIPnyEi1VU1RE8xeKpBw_6askP5-A");
+const client = supabase.createClient("https://acebtnoxoijpurwvpisr.supabase.co", "sb_publishable_zgLg3lODrTUNc2JDa1aoXA_epBmQ3Zx");
 
 let user = null;
 let currentRoom = null;
