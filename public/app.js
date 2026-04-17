@@ -3,7 +3,6 @@ const client = supabase.createClient("https://acebtnoxoijpurwvpisr.supabase.co",
 let user = null;
 let currentRoom = null;
 
-// 通知音
 const audio = new Audio("public/notification.mp3");
 
 window.onload = async () => {
@@ -44,16 +43,13 @@ async function ensureProfile() {
         await client.from("profiles").insert({
             id: user.id,
             username,
-            name: username
+            name: username,
+            pin: username
         });
     }
 }
 
-// ===============================
-// チャット一覧
-// ===============================
 async function loadChats() {
-
     const { data: rooms } = await client.from("rooms").select("*");
 
     let html = "";
@@ -96,9 +92,6 @@ async function loadChats() {
     document.getElementById("chatList").innerHTML = html;
 }
 
-// ===============================
-// ルーム開く
-// ===============================
 function openRoom(id, name) {
     currentRoom = id;
 
@@ -115,9 +108,6 @@ function backList() {
     document.getElementById("chatListPage").style.display = "block";
 }
 
-// ===============================
-// メッセージ表示
-// ===============================
 async function loadMessages() {
 
     const { data } = await client
@@ -162,9 +152,6 @@ async function loadMessages() {
     markAsRead();
 }
 
-// ===============================
-// 既読
-// ===============================
 async function markAsRead() {
 
     const { data } = await client
@@ -183,11 +170,7 @@ async function markAsRead() {
     }
 }
 
-// ===============================
-// 送信
-// ===============================
 async function sendMsg() {
-
     const input = document.getElementById("msgInput");
     const file = document.getElementById("fileInput").files[0];
 
@@ -242,20 +225,152 @@ function subscribeMessages() {
         .subscribe();
 }
 
-// ===============================
-// 友達追加（PIN）
-// ===============================
 async function openAdd() {
 
     Swal.fire({
         title: "追加",
-        html: `<input id="pinInput" class="form-control" placeholder="PIN">`,
+        html: `
+            <button class="btn btn-primary w-100 mb-2" onclick="scanQR()"><i class="bi bi-qr-code-scan"></i><small>QRコードをスキャン</small></button>
+            <input id="pinInput" class="form-control" placeholder="PIN">
+        `,
         confirmButtonText: "追加"
     }).then(async res => {
 
         if (!res.isConfirmed) return;
 
-        const pin = document.getElementById("pinInput").value;
+        const pin = document.getElementById("pinInput").value.trim();
+        if (!pin) return;
+
+        await addByPin(pin);
+    });
+}
+
+async function addByPin(pin) {
+    const { data } = await client
+        .from("profiles")
+        .select("*")
+        .eq("pin", pin)
+        .single();
+
+    if (!data) {
+        Swal.fire("見つからない");
+        return;
+    }
+
+    const { data: room } = await client
+        .from("rooms")
+        .insert({ name: data.name })
+        .select()
+        .single();
+
+    await client.from("room_members").insert([
+        { room_id: room.id, user_id: user.id },
+        { room_id: room.id, user_id: data.id }
+    ]);
+
+    Swal.fire("追加完了");
+    loadChats();
+}
+function scanQR() {
+    Swal.fire({
+        title: "QRコードをスキャン",
+        html: `<div id="qrReader" style="width: 250px; margin:auto;"></div>`,
+        didOpen: () => {
+            const qr = new Html5Qrcode("qrReader");
+
+            qr.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: 200 },
+                async (decoded) => {
+                    qr.stop();
+                    Swal.close();
+
+                    if (decoded.includes("/add.html?data=")) {
+                        location.href = decoded;
+                        return;
+                    }
+
+                    Swal.fire("不正なQRコードです");
+                }
+            );
+        }
+    });
+}
+
+function addQR() {
+    const myPin = localStorage.getItem("username");
+
+    const payload = {
+        from: myPin,
+        to: null,
+        room_id: null
+    };
+
+    const base64 = btoa(JSON.stringify(payload));
+    const url = `${location.origin}/add.html?data=${base64}`;
+
+    Swal.fire({
+        title: "あなたのQRコード",
+        html: `<canvas id="myQR"></canvas>`,
+        didOpen: () => {
+            QRCode.toCanvas(document.getElementById("myQR"), url);
+        }
+    });
+}
+
+function showQR() {
+    const myPin = localStorage.getItem("username");
+
+    const payload = {
+        from: myPin,
+        to: null,
+        room_id: currentRoom
+    };
+
+    const base64 = btoa(JSON.stringify(payload));
+    const url = `${location.origin}/add.html?data=${base64}`;
+
+    Swal.fire({
+        title: "招待QRコード",
+        html: `<canvas id="qrcode"></canvas>`,
+        didOpen: () => {
+            QRCode.toCanvas(document.getElementById("qrcode"), url);
+        }
+    });
+}
+
+async function openSettings() {
+    const newName = await Swal.fire({
+        title: "ルーム名変更",
+        input: "text",
+        inputPlaceholder: "新しいルーム名",
+        showCancelButton: true
+    });
+
+    if (!newName.value) return;
+
+    await client
+        .from("rooms")
+        .update({ name: newName.value })
+        .eq("id", currentRoom);
+
+    Swal.fire("変更しました");
+    loadChats();
+}
+
+async function addMemberToGroup() {
+    Swal.fire({
+        title: "メンバー追加",
+        html: `
+            <button class="btn btn-primary w-100 mb-2" onclick="scanQR()"><i class="bi bi-qr-code-scan"></i><small>QRコードをスキャン</small></button>
+            <input id="pinInput2" class="form-control" placeholder="PINを入力">
+        `,
+        confirmButtonText: "追加"
+    }).then(async res => {
+        if (!res.isConfirmed) return;
+
+        const pin = document.getElementById("pinInput2").value.trim();
+        if (!pin) return;
 
         const { data } = await client
             .from("profiles")
@@ -264,65 +379,16 @@ async function openAdd() {
             .single();
 
         if (!data) {
-            Swal.fire("見つからない");
+            Swal.fire("見つかりません");
             return;
         }
 
-        const { data: room } = await client
-            .from("rooms")
-            .insert({ name: data.name })
-            .select()
-            .single();
+        await client.from("room_members").insert({
+            room_id: currentRoom,
+            user_id: data.id
+        });
 
-        await client.from("room_members").insert([
-            { room_id: room.id, user_id: user.id },
-            { room_id: room.id, user_id: data.id }
-        ]);
-
-        Swal.fire("追加完了");
-        loadChats();
-    });
-}
-
-// ===============================
-// グループ作成
-// ===============================
-async function createGroup() {
-
-    const name = prompt("グループ名");
-    if (!name) return;
-
-    const { data: room } = await client
-        .from("rooms")
-        .insert({ name, is_group: true })
-        .select()
-        .single();
-
-    await client.from("room_members").insert({
-        room_id: room.id,
-        user_id: user.id,
-        role: "admin"
-    });
-
-    loadChats();
-}
-
-// ===============================
-// QR招待
-// ===============================
-function showQR() {
-
-    const url = location.origin + "?room=" + currentRoom;
-
-    Swal.fire({
-        title: "QR",
-        html: `<canvas id="qrcode"></canvas>`,
-        didOpen: () => {
-            QRCode.toCanvas(
-                document.getElementById("qrcode"),
-                url
-            );
-        }
+        Swal.fire("追加しました");
     });
 }
 
@@ -343,9 +409,6 @@ async function checkInvite() {
     history.replaceState(null, null, "/");
 }
 
-// ===============================
-// 退出
-// ===============================
 async function leaveGroup() {
 
     await client
