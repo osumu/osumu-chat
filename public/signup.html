@@ -130,6 +130,13 @@
                         icon: "error"
                     });
                 }
+                if (error.message.includes("User already registered")){
+                    Swal.fire({
+                        title: "エラー",
+                        html: `このユーザーは既に存在します。`,
+                        icon: "error"
+                    });
+                }
                 Swal.fire("エラー", error.message, "error");
                 return;
             }

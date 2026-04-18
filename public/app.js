@@ -52,7 +52,7 @@ async function ensureProfile() {
 async function loadChats() {
     const { data: rooms } = await client.from("rooms").select("*");
 
-    if (!rooms) return;
+    if (error || !rooms) return;
 
     let html = "";
 
@@ -94,15 +94,21 @@ async function loadChats() {
     document.getElementById("chatList").innerHTML = html;
 }
 
-function openRoom(id, name) {
+async function openRoom(id, name) {
     currentRoom = id;
 
     document.getElementById("chatUser").innerText = name;
     document.getElementById("chatListPage").style.display = "none";
     document.getElementById("chatRoom").style.display = "block";
 
+    await client.from("room_members").upsert({
+        room_id: id,
+        user_id: user.id
+    });
+
     loadMessages();
 }
+
 
 // 戻る
 function backList() {
@@ -325,6 +331,7 @@ async function loadMessages() {
 
 
 async function markAsRead() {
+
     const { data } = await client
         .from("messages")
         .select("*")
