@@ -15,7 +15,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jquery-emoji-picker@0.2.2/js/jquery.emojis.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@joeattardi/emoji-button@4.6.4/dist/index.min.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3"></script>
 
@@ -29,6 +29,21 @@
         #fileInput {
             max-width: 150px;
         }
+
+        .preview-img {
+            width: 100%;
+            border-radius: 10px;
+            margin-top: 5px;
+            cursor: pointer;
+        }
+
+        .preview-file {
+            margin-top: 5px;
+            padding: 8px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -39,16 +54,14 @@
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h1>チャット</h1>
                 <div>
-                    <button class="btn btn-success me-2" onclick="createGroup()">
+                    <button class="btn btn-outline-dark me-3" onclick="addQR()">
+                        <i class="bi bi-qr-code"></i>
+                    </button>
+                    <button class="btn btn-outline-success me-3" onclick="createGroup()">
                         <i class="bi bi-people"></i>
                     </button>
-
-                    <button class="btn btn-primary me-2" onclick="openAdd()">
-                        <i class="bi bi-person-plus"></i>
-                    </button>
-
-                    <button class="btn btn-warning" onclick="addQR()">
-                        <i class="bi bi-qr-code"></i>
+                    <button class="btn btn-outline-danger me-3" onclick="openAdd()">
+                        <i class="bi bi-plus-lg"></i>
                     </button>
                 </div>
             </div>
@@ -95,8 +108,8 @@
             <div id="messages"></div>
 
             <div class="input-group mt-2">
-                <input id="msgInput" class="form-control" placeholder="メッセージを入力">
                 <input type="file" id="fileInput" class="form-control">
+                <input id="msgInput" class="form-control" placeholder="メッセージを入力">
                 <button onclick="sendMsg()" class="btn btn-success">
                     <i class="bi bi-send"></i>
                 </button>
