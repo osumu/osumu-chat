@@ -52,7 +52,7 @@ async function ensureProfile() {
 async function loadChats() {
     const { data: rooms } = await client.from("rooms").select("*");
 
-    if (error || !rooms) return;
+    if (!rooms) return;
 
     let html = "";
 
