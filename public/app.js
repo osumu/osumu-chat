@@ -52,7 +52,7 @@ async function ensureProfile() {
 async function loadChats() {
     const { data: rooms } = await client.from("rooms").select("*");
 
-    if (error || !rooms) return;
+    if (!rooms) return;
 
     let html = "";
 
@@ -325,7 +325,6 @@ async function loadMessages() {
 
 
 async function markAsRead() {
-
     const { data } = await client
         .from("messages")
         .select("*")
