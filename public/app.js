@@ -108,6 +108,161 @@ function backList() {
     document.getElementById("chatListPage").style.display = "block";
 }
 
+function initReactionButtons() {
+    const buttons = document.querySelectorAll(".react-btn");
+
+    buttons.forEach(btn => {
+        const picker = new EmojiButton();
+
+        picker.on('emoji', async emoji => {
+            const msgId = btn.dataset.id;
+
+            const { data: msg } = await client
+                .from("messages")
+                .select("reactions")
+                .eq("id", msgId)
+                .single();
+
+            const newReactions = msg.reactions || [];
+            newReactions.push({
+                emoji: emoji,
+                user: user.id
+            });
+
+            await client
+                .from("messages")
+                .update({ reactions: newReactions })
+                .eq("id", msgId);
+
+            loadMessages();
+        });
+
+        btn.addEventListener("click", () => {
+            picker.togglePicker(btn);
+        });
+    });
+}
+
+function loadFile(url) {
+    const lower = url.toLowerCase();
+
+    if (lower.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg|tiff|ico|heic|avif)$/)) {
+        Swal.fire({
+            html: `<img src="${url}" style="width:100%;border-radius:10px;">`,
+            showConfirmButton: false,
+            width: "90%"
+        });
+        return;
+    }
+
+    if (lower.match(/\.(mp3|wav|ogg|m4a|aac|flac|aiff|wma)$/)) {
+        Swal.fire({
+            html: `<audio controls style="width:100%"><source src="${url}"></audio>`,
+            showConfirmButton: false,
+            width: "90%"
+        });
+        return;
+    }
+
+    if (lower.match(/\.(mp4|webm|mov|mkv|avi|wmv|flv|m4v)$/)) {
+        Swal.fire({
+            html: `<video controls style="width:100%;border-radius:10px;"><source src="${url}"></video>`,
+            showConfirmButton: false,
+            width: "90%"
+        });
+        return;
+    }
+
+    if (lower.match(/\.pdf$/)) {
+        Swal.fire({
+            html: `<iframe src="${url}" style="width:100%;height:80vh;border:none;"></iframe>`,
+            showConfirmButton: false,
+            width: "95%"
+        });
+        return;
+    }
+
+    if (lower.match(/\.(doc|docx|xls|xlsx|ppt|pptx|odt|ods|odp)$/)) {
+        Swal.fire({
+            html: `
+                <div style="font-size:18px;margin-bottom:10px;">Office 文書</div>
+                <a href="${url}" target="_blank" class="btn btn-primary">開く</a>
+            `,
+            showConfirmButton: false,
+            width: "400px"
+        });
+        return;
+    }
+
+    if (lower.match(/\.(txt|csv|json|xml|md|log|yaml|yml|ini|cfg|env|py|js|ts|html|css|c|cpp|java|rb|php|go|rs|swift)$/)) {
+        fetch(url)
+            .then(res => res.text())
+            .then(text => {
+                Swal.fire({
+                    html: `<pre style="text-align:left;white-space:pre-wrap;">${text}</pre>`,
+                    width: "600px"
+                });
+            });
+        return;
+    }
+
+    // ============================
+    // 3D / CAD
+    // ============================
+    if (lower.match(/\.(obj|stl|fbx|dae|gltf|glb)$/)) {
+        Swal.fire({
+            html: `
+                <div style="font-size:18px;margin-bottom:10px;">3Dモデルです。見るにはダウンロードする必要があります。</div>
+                <a href="${url}" target="_blank" class="btn btn-primary">ダウンロード</a>
+            `,
+            showConfirmButton: false,
+            width: "400px"
+        });
+        return;
+    }
+
+    if (lower.match(/\.(zip|rar|7z|tar|gz|bz2|xz)$/)) {
+        Swal.fire({
+            title: "圧縮ファイルをダウンロードしますか？",
+            html: `<div style="font-size:14px;color:#666;">${url}</div>`,
+            showCancelButton: true,
+            confirmButtonText: "ダウンロード",
+            icon: "warning",
+            width: "450px"
+        }).then(res => {
+            if (res.isConfirmed) window.open(url, "_blank");
+        });
+        return;
+    }
+
+    if (lower.match(/\.(exe|msi|apk|bat|cmd|sh|app|deb|rpm)$/)) {
+        Swal.fire({
+            title: "このファイルをダウンロードしますか？",
+            html: `
+                <div style="font-size:18px;margin-bottom:10px;">実行ファイルです</div>
+                <div style="font-size:14px;color:#666;">${url}</div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: "ダウンロード",
+            icon: "warning",
+            width: "450px"
+        }).then(res => {
+            if (res.isConfirmed) window.open(url, "_blank");
+        });
+        return;
+    }
+
+    Swal.fire({
+        title: "ファイルを開きますか？",
+        text: url,
+        showCancelButton: true,
+        confirmButtonText: "開く",
+    }).then(res => {
+        if (res.isConfirmed) window.open(url, "_blank");
+    });
+}
+
+
 async function loadMessages() {
 
     const { data } = await client
@@ -122,35 +277,50 @@ async function loadMessages() {
     data.forEach(m => {
 
         const isMe = m.sender_id === user.id;
-
         let cls = isMe ? "bubble-me" : "bubble-you";
 
-        if (!isMe && lastUser === m.sender_id) {
-            cls += " square";
-        }
+        if (!isMe && lastUser === m.sender_id) cls += " square";
 
         let readMark = "";
 
         if (isMe) {
-            readMark = (m.read_by && m.read_by.length > 1) ? "✔✔" : "✔";
+            if (m.read_by && m.read_by.length > 1) {
+                readMark = `<i class="bi bi-check2-all"></i>`;
+            } else {
+                readMark = `<i class="bi bi-check-lg"></i>`;
+            }
         }
 
+        const attachment = loadFile(m.file_url);
+        const reactions = (m.reactions || []).map(r => r.emoji).join(" ");
+
         html += `
-    <div class="${cls}">
-      ${m.content || ""}
-      ${m.file_url ? `<a href="${m.file_url}" target="_blank">📎</a>` : ""}
-      <div class="meta">${formatDate(m.created_at)} ${readMark}</div>
-    </div>
-    <div style="clear:both"></div>
-    `;
+        <div class="${cls}">
+            ${m.content || ""}
+            ${attachment}
+
+            <div class="meta">${formatDate(m.created_at)} ${readMark}</div>
+
+            <button class="btn btn-sm btn-light react-btn" data-id="${m.id}">
+                <i class="bi bi-hand-thumbs-up"></i>
+            </button>
+
+            <div class="reactions" id="react-${m.id}">
+                ${reactions}
+            </div>
+        </div>
+        <div style="clear:both"></div>
+        `;
 
         lastUser = m.sender_id;
     });
 
     document.getElementById("messages").innerHTML = html;
 
+    initReactionButtons();
     markAsRead();
 }
+
 
 async function markAsRead() {
 
