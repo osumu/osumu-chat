@@ -2,12 +2,14 @@ const client = supabase.createClient("https://acebtnoxoijpurwvpisr.supabase.co",
 
 let user = null;
 let currentRoom = null;
+let channel = null;
+let sending = false;
 
 const audio = new Audio("public/notification.mp3");
 
-// ======================
+// ===============================
 // 初期化
-// ======================
+// ===============================
 window.onload = async () => {
     const { data } = await client.auth.getSession();
 
@@ -20,41 +22,25 @@ window.onload = async () => {
 
     await ensureProfile();
     await checkInvite();
-
-    loadChats();
+    await loadChats();
     subscribeMessages();
 };
 
-// ======================
-// ユーティリティ
-// ======================
-function escapeHtml(str = "") {
+// ===============================
+// XSS対策
+// ===============================
+function escapeHTML(str = "") {
     return str
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
-function formatDate(date) {
-    const d = new Date(date);
-    return (
-        d.getFullYear().toString().slice(2) +
-        "/" +
-        (d.getMonth() + 1).toString().padStart(2, "0") +
-        "/" +
-        d.getDate().toString().padStart(2, "0") +
-        " " +
-        d.getHours().toString().padStart(2, "0") +
-        ":" +
-        d.getMinutes().toString().padStart(2, "0")
-    );
-}
-
-// ======================
+// ===============================
 // プロフィール
-// ======================
+// ===============================
 async function ensureProfile() {
     const username = localStorage.getItem("username") || "user";
 
@@ -69,89 +55,75 @@ async function ensureProfile() {
             id: user.id,
             username,
             name: username,
-            pin: username
+            pin: username,
         });
     }
 }
 
-// ======================
-// チャット一覧（自分の部屋のみ）
-// ======================
+// ===============================
+// チャット一覧（所属ルームのみ）
+// ===============================
 async function loadChats() {
-    const { data, error } = await client
+    const { data } = await client
         .from("room_members")
-        .select("room_id, rooms(*)")
+        .select("rooms(*)")
         .eq("user_id", user.id);
 
-    if (error || !data) return;
+    const rooms = data?.map((r) => r.rooms) || [];
 
     let html = "";
 
-    for (const r of data) {
-        const room = r.rooms;
-
-        const { data: msgData } = await client
+    for (const r of rooms) {
+        const { data: msgs } = await client
             .from("messages")
             .select("*")
-            .eq("room_id", room.id);
+            .eq("room_id", r.id);
 
-        const msgs = msgData || [];
+        const last = msgs?.[msgs.length - 1];
 
-        const last = msgs[msgs.length - 1];
-
-        const unread = msgs.filter(
+        const unread = (msgs || []).filter(
             (m) =>
                 !m.read_by?.includes(user.id) &&
                 m.sender_id !== user.id
         ).length;
 
         html += `
-      <div class="chat-item" onclick="openRoom('${room.id}','${room.name}')">
-        <div class="avatar"></div>
-        <div style="flex:1">
-          <b>${escapeHtml(room.name)}</b><br>
-          <small>${escapeHtml(last?.content || "メッセージなし")}</small>
-        </div>
-        <div>
-          ${unread > 0 ? `<span class="badge bg-danger">${unread}</span>` : ""}
-        </div>
+      <div class="chat-item" onclick="openRoom('${r.id}','${escapeHTML(r.name)}')">
+        <b>${escapeHTML(r.name)}</b><br>
+        <small>${escapeHTML(last?.content || "なし")}</small>
+        ${unread ? `<span class="badge bg-danger">${unread}</span>` : ""}
       </div>
     `;
     }
 
     document.getElementById("chatList").innerHTML =
-        html || "<p>まだチャットがありません</p>";
+        html || "<p>ルームなし</p>";
 }
 
-// ======================
-// ルーム入室
-// ======================
+// ===============================
+// ルーム参加（DM/グループ再利用）
+// ===============================
 async function openRoom(id, name) {
     currentRoom = id;
 
-    document.getElementById("chatUser").innerText = name;
     document.getElementById("chatListPage").style.display = "none";
     document.getElementById("chatRoom").style.display = "block";
+    document.getElementById("chatUser").innerText = name;
 
     await client.from("room_members").upsert(
-        { room_id: id, user_id: user.id },
+        {
+            room_id: id,
+            user_id: user.id,
+        },
         { onConflict: "room_id,user_id" }
     );
 
     loadMessages();
 }
 
-// ======================
-// 戻る
-// ======================
-function backList() {
-    document.getElementById("chatRoom").style.display = "none";
-    document.getElementById("chatListPage").style.display = "block";
-}
-
-// ======================
-// メッセージ表示
-// ======================
+// ===============================
+// メッセージ描画
+// ===============================
 async function loadMessages() {
     if (!currentRoom) return;
 
@@ -161,27 +133,26 @@ async function loadMessages() {
         .eq("room_id", currentRoom)
         .order("created_at", { ascending: true });
 
-    const msgs = data || [];
-
     let html = "";
     let lastUser = null;
 
-    msgs.forEach((m) => {
+    data?.forEach((m) => {
         const isMe = m.sender_id === user.id;
+
         let cls = isMe ? "bubble-me" : "bubble-you";
 
-        if (!isMe && lastUser === m.sender_id) cls += " square";
-
-        let readMark = "";
-        if (isMe) {
-            readMark =
-                m.read_by?.length > 1
-                    ? `<i class="bi bi-check2-all"></i>`
-                    : `<i class="bi bi-check-lg"></i>`;
+        // 連続メッセージ → square
+        if (!isMe && lastUser === m.sender_id) {
+            cls += " square";
         }
 
+        const readMark =
+            isMe && m.read_by?.length > 1
+                ? "✓✓"
+                : "✓";
+
         const attachment = m.file_url
-            ? `<button onclick="loadFile('${m.file_url}')">📎 ファイル</button>`
+            ? `<button onclick="loadFile('${m.file_url}')">添付</button>`
             : "";
 
         const reactions = (m.reactions || [])
@@ -190,20 +161,11 @@ async function loadMessages() {
 
         html += `
       <div class="${cls}">
-        ${escapeHtml(m.content || "")}
+        ${escapeHTML(m.content || "")}
         ${attachment}
-
-        <div class="meta">
-          ${formatDate(m.created_at)} ${readMark}
-        </div>
-
-        <button class="btn btn-sm btn-light react-btn" data-id="${m.id}">
-          👍
-        </button>
-
+        <div class="meta">${readMark}</div>
         <div>${reactions}</div>
       </div>
-      <div style="clear:both"></div>
     `;
 
         lastUser = m.sender_id;
@@ -211,105 +173,162 @@ async function loadMessages() {
 
     document.getElementById("messages").innerHTML = html;
 
-    initReactionButtons();
-    markAsRead();
+    markAsReadBatch();
 }
 
-// ======================
-// 添付ファイル
-// ======================
-function loadFile(url) {
-    if (!url) return;
-
-    const lower = url.toLowerCase();
-
-    if (lower.match(/\.(jpg|png|gif|webp)$/)) {
-        Swal.fire({
-            html: `<img src="${url}" style="width:100%">`
-        });
-        return;
-    }
-
-    window.open(url, "_blank");
-}
-
-// ======================
-// 既読
-// ======================
-async function markAsRead() {
-    if (!currentRoom) return;
-
+// ===============================
+// 一括既読（最適化済み）
+// ===============================
+async function markAsReadBatch() {
     const { data } = await client
         .from("messages")
-        .select("*")
+        .select("id, read_by")
         .eq("room_id", currentRoom);
 
-    const msgs = data || [];
-
-    for (const m of msgs) {
-        if (!m.read_by?.includes(user.id)) {
-            await client
+    const updates = (data || [])
+        .filter((m) => !m.read_by?.includes(user.id))
+        .map((m) =>
+            client
                 .from("messages")
-                .update({
-                    read_by: [...(m.read_by || []), user.id]
-                })
-                .eq("id", m.id);
-        }
-    }
+                .update({ read_by: [user.id] })
+                .eq("id", m.id)
+        );
+
+    await Promise.all(updates);
 }
 
-// ======================
-// 送信
-// ======================
+// ===============================
+// 送信（連打防止）
+// ===============================
 async function sendMsg() {
+    if (sending) return;
+
     const input = document.getElementById("msgInput");
     const file = document.getElementById("fileInput").files[0];
 
     if (!input.value && !file) return;
 
-    let fileUrl = null;
+    sending = true;
+    document.getElementById("sendBtn").disabled = true;
 
-    if (file) {
-        const path = crypto.randomUUID() + "_" + file.name;
+    try {
+        let fileUrl = null;
 
-        await client.storage.from("files").upload(path, file);
+        if (file) {
+            const path = crypto.randomUUID() + "_" + file.name;
 
-        const { data } = client.storage.from("files").getPublicUrl(path);
-        fileUrl = data.publicUrl;
+            await client.storage.from("files").upload(path, file);
+
+            const { data } = client.storage.from("files").getPublicUrl(path);
+            fileUrl = data.publicUrl;
+        }
+
+        await client.from("messages").insert({
+            room_id: currentRoom,
+            sender_id: user.id,
+            content: input.value,
+            file_url: fileUrl,
+        });
+
+        input.value = "";
+    } finally {
+        sending = false;
+        document.getElementById("sendBtn").disabled = false;
     }
-
-    await client.from("messages").insert({
-        room_id: currentRoom,
-        sender_id: user.id,
-        content: input.value,
-        file_url: fileUrl
-    });
-
-    input.value = "";
 }
 
-// ======================
-// リアルタイム
-// ======================
+// ===============================
+// リアルタイム（重複防止）
+// ===============================
 function subscribeMessages() {
-    client
+    if (channel) client.removeChannel(channel);
+
+    channel = client
         .channel("messages")
         .on(
             "postgres_changes",
-            { event: "INSERT", schema: "public", table: "messages" },
+            {
+                event: "INSERT",
+                schema: "public",
+                table: "messages",
+            },
             (payload) => {
                 const msg = payload.new;
 
-                if (msg.room_id === currentRoom) {
-                    loadMessages();
-                }
+                if (msg.room_id === currentRoom) loadMessages();
 
-                if (msg.sender_id !== user.id) {
-                    audio.play();
-                }
+                if (msg.sender_id !== user.id) audio.play();
 
                 loadChats();
             }
         )
         .subscribe();
+}
+
+// ===============================
+// 安全ファイルビューア
+// ===============================
+function loadFile(url) {
+    const lower = url.toLowerCase();
+    const safe = escapeHTML(url);
+
+    if (lower.match(/\.(jpg|png|gif|webp|jpeg)$/)) {
+        return Swal.fire({
+            html: `<img src="${safe}" style="width:100%">`,
+        });
+    }
+
+    if (lower.match(/\.(mp4|webm)$/)) {
+        return Swal.fire({
+            html: `<video controls style="width:100%"><source src="${safe}"></video>`,
+        });
+    }
+
+    if (lower.endsWith(".pdf")) {
+        return Swal.fire({
+            html: `<iframe src="${safe}" style="width:100%;height:80vh"></iframe>`,
+        });
+    }
+
+    Swal.fire({
+        title: "開きますか？",
+        text: url,
+    }).then((r) => {
+        if (r.isConfirmed) window.open(url, "_blank");
+    });
+}
+
+// ===============================
+// UI戻る
+// ===============================
+function backList() {
+    document.getElementById("chatRoom").style.display = "none";
+    document.getElementById("chatListPage").style.display = "block";
+}
+
+// ===============================
+// QR / PIN / メンバー（簡易統合）
+// ===============================
+async function addByPin(pin) {
+    const { data } = await client
+        .from("profiles")
+        .select("*")
+        .eq("pin", pin)
+        .single();
+
+    if (!data) return Swal.fire("見つからない");
+
+    const { data: room } = await client
+        .from("rooms")
+        .insert({ name: data.name })
+        .select()
+        .single();
+
+    await client.from("room_members").insert([
+        { room_id: room.id, user_id: user.id },
+        { room_id: room.id, user_id: data.id },
+    ]);
+
+    loadChats();
+    Swal.fire("追加完了");
 }
