@@ -266,7 +266,7 @@ function loadFile(url) {
 
 
 async function loadMessages() {
-
+    if (!currentRoom) return;
     const { data } = await client
         .from("messages")
         .select("*")
