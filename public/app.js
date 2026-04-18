@@ -58,12 +58,14 @@ async function loadChats() {
 
     for (const r of rooms) {
 
-        const { data: msgs } = await client
+        const { data } = await client
             .from("messages")
             .select("*")
             .eq("room_id", r.id);
 
-        const last = msgs?.[msgs.length - 1];
+        const msgs = data || [];
+
+        const last = msgs[msgs.length - 1];
 
         const unread = msgs.filter(m =>
             !m.read_by?.includes(user.id) &&
@@ -101,9 +103,11 @@ async function openRoom(id, name) {
     document.getElementById("chatListPage").style.display = "none";
     document.getElementById("chatRoom").style.display = "block";
 
-    await client.from("room_members").upsert({
-        room_id: id,
-        user_id: user.id
+    await client.from("room_members").upsert([
+        { room_id: room.id, user_id: user.id },
+        { room_id: room.id, user_id: data.id }
+    ], {
+        onConflict: "room_id,user_id"
     });
 
     loadMessages();
