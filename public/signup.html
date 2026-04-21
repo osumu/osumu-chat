@@ -31,7 +31,8 @@
                         <div class="d-flex flex-row align-items-center mb-4">
                             <i class="bi bi-person-circle me-3" style="font-size:25px"></i>
                             <div data-mdb-input-init class="form-outline flex-fill mb-0">
-                                <input type="text" id="su_name" class="form-control" placeholder="名前を入力" />
+                                <input type="text" id="su_name" class="form-control" placeholder="名前を入力"
+                                    autocomplete="off" />
                             </div>
                         </div>
 
@@ -43,14 +44,16 @@
                                     d="M8 0a4 4 0 0 1 4 4v2.05a2.5 2.5 0 0 1 2 2.45v5a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 13.5v-5a2.5 2.5 0 0 1 2-2.45V4a4 4 0 0 1 4-4m0 1a3 3 0 0 0-3 3v2h6V4a3 3 0 0 0-3-3" />
                             </svg>
                             <div data-mdb-input-init class="form-outline flex-fill mb-0">
-                                <input type="password" id="su_pass" class="form-control" placeholder="パスワードを入力" />
+                                <input type="password" id="su_pass" class="form-control" placeholder="パスワードを入力"
+                                    autocomplete="off" />
                             </div>
                         </div>
 
                         <div class="d-flex flex-row align-items-center mb-4">
                             <i class="bi bi-key me-3" style="font-size:25px"></i>
                             <div data-mdb-input-init class="form-outline flex-fill mb-0">
-                                <input type="password" id="su_pass2" class="form-control" placeholder="もう一度パスワードを入力" />
+                                <input type="password" id="su_pass2" class="form-control" placeholder="もう一度パスワードを入力"
+                                    autocomplete="off" />
                             </div>
                         </div>
 
@@ -75,7 +78,7 @@
             </div>
         </div>
     </section>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         const client = supabase.createClient("https://acebtnoxoijpurwvpisr.supabase.co", "sb_publishable_zgLg3lODrTUNc2JDa1aoXA_epBmQ3Zx");
