@@ -64,42 +64,100 @@ async function ensureProfile() {
 // チャット一覧（所属ルームのみ）
 // ===============================
 async function loadChats() {
-    const { data, error } = await client
-        .from("room_members")
-        .select(`
-            room_id,
-            rooms!room_members_room_id_fkey (
-                id,
-                name,
-                is_group
-            )
-        `)
-        .eq("user_id", user.id);
+    try {
+        // 自分が所属している部屋一覧取得
+        const { data: members, error: memberError } = await client
+            .from("room_members")
+            .select("room_id")
+            .eq("user_id", user.id);
 
-    if (error) {
-        console.error(error);
-        return;
+        if (memberError) {
+            console.error(memberError);
+            return;
+        }
+
+        const roomIds = (members || []).map(m => m.room_id);
+
+        // 所属部屋なし
+        if (roomIds.length === 0) {
+            document.getElementById("chatList").innerHTML =
+                `<p>まだ相手がいません。右上の＋ボタンで話し相手を追加しましょう。</p>`;
+            return;
+        }
+
+        // 部屋取得
+        const { data: rooms, error: roomError } = await client
+            .from("rooms")
+            .select("*")
+            .in("id", roomIds)
+            .order("created_at", { ascending: false });
+
+        if (roomError) {
+            console.error(roomError);
+            return;
+        }
+
+        // メッセージ取得（一括）
+        const { data: msgs, error: msgError } = await client
+            .from("messages")
+            .select("*")
+            .in("room_id", roomIds)
+            .order("created_at", { ascending: true });
+
+        if (msgError) {
+            console.error(msgError);
+            return;
+        }
+
+        const messages = msgs || [];
+        let html = "";
+
+        for (const r of rooms || []) {
+            const roomMsgs = messages.filter(m => m.room_id === r.id);
+
+            const last = roomMsgs[roomMsgs.length - 1];
+
+            const unread = roomMsgs.filter(m =>
+                m.sender_id !== user.id &&
+                !m.read_by?.includes(user.id)
+            ).length;
+
+            html += `
+                <div class="chat-item"
+                    onclick="openRoom('${r.id}','${escapeHTML(r.name)}')">
+
+                    <div class="avatar"></div>
+
+                    <div style="flex:1">
+                        <b>${escapeHTML(r.name)}</b><br>
+                        <small>
+                            ${escapeHTML(last?.content || "メッセージなし")}
+                        </small>
+                    </div>
+
+                    <div>
+                        ${unread > 0
+                    ? `<span class="badge bg-danger">${unread}</span>`
+                    : ""
+                }
+                    </div>
+
+                </div>
+            `;
+        }
+
+        if (!html) {
+            html = `<p>まだ相手がいません。右上の＋ボタンで話し相手を追加しましょう。</p>`;
+        }
+
+        document.getElementById("chatList").innerHTML = html;
+
+    } catch (e) {
+        console.error(e);
+
+        document.getElementById("chatList").innerHTML =
+            `<p>読み込みに失敗しました。</p>`;
     }
-
-    let html = "";
-
-    for (const row of data || []) {
-        const room = row.rooms;
-        if (!room) continue;
-
-        html += `
-            <div class="chat-item"
-                onclick="openRoom('${room.id}','${room.name}')">
-                ${room.name}
-            </div>
-        `;
-    }
-
-    if (!html) {
-        html = `<p>まだ相手がいません。右上の＋ボタンで話し相手を追加しましょう。</p>`;
-    }
-
-    document.getElementById("chatList").innerHTML = html;
 }
 
 // ===============================
