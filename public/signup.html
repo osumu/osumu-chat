@@ -77,7 +77,7 @@
     </section>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-     <script>
+    <script>
         const client = supabase.createClient("https://acebtnoxoijpurwvpisr.supabase.co", "sb_publishable_zgLg3lODrTUNc2JDa1aoXA_epBmQ3Zx");
 
         async function signup() {
@@ -128,7 +128,7 @@
                         icon: "error"
                     });
                 }
-                if (error.message.includes("User already registered")){
+                if (error.message.includes("User already registered")) {
                     Swal.fire({
                         title: "エラー",
                         html: `このユーザーは既に存在します。`,
