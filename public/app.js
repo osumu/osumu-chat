@@ -1,7 +1,4 @@
-const client = supabase.createClient(
-    "https://url.supabase.co",
-    "sb_publishable_anonkey"
-);
+const client = supabase.createClient("https://acebtnoxoijpurwvpisr.supabase.co", "sb_publishable_zgLg3lODrTUNc2JDa1aoXA_epBmQ3Zx");
 
 let user = null;
 let currentRoom = null;
