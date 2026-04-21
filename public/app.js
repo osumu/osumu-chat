@@ -64,40 +64,42 @@ async function ensureProfile() {
 // チャット一覧（所属ルームのみ）
 // ===============================
 async function loadChats() {
-    const { data } = await client
+    const { data, error } = await client
         .from("room_members")
-        .select("rooms(*)")
+        .select(`
+            room_id,
+            rooms!room_members_room_id_fkey (
+                id,
+                name,
+                is_group
+            )
+        `)
         .eq("user_id", user.id);
 
-    const rooms = data?.map((r) => r.rooms) || [];
+    if (error) {
+        console.error(error);
+        return;
+    }
 
     let html = "";
 
-    for (const r of rooms) {
-        const { data: msgs } = await client
-            .from("messages")
-            .select("*")
-            .eq("room_id", r.id);
-
-        const last = msgs?.[msgs.length - 1];
-
-        const unread = (msgs || []).filter(
-            (m) =>
-                !m.read_by?.includes(user.id) &&
-                m.sender_id !== user.id
-        ).length;
+    for (const row of data || []) {
+        const room = row.rooms;
+        if (!room) continue;
 
         html += `
-      <div class="chat-item" onclick="openRoom('${r.id}','${escapeHTML(r.name)}')">
-        <b>${escapeHTML(r.name)}</b><br>
-        <small>${escapeHTML(last?.content || "なし")}</small>
-        ${unread ? `<span class="badge bg-danger">${unread}</span>` : ""}
-      </div>
-    `;
+            <div class="chat-item"
+                onclick="openRoom('${room.id}','${room.name}')">
+                ${room.name}
+            </div>
+        `;
     }
 
-    document.getElementById("chatList").innerHTML =
-        html || "<p>まだ相手がいません。右上の＋ボタンで話し相手を追加しましょう。</p>";
+    if (!html) {
+        html = `<p>まだ相手がいません。右上の＋ボタンで話し相手を追加しましょう。</p>`;
+    }
+
+    document.getElementById("chatList").innerHTML = html;
 }
 
 // ===============================
