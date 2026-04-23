@@ -74,8 +74,8 @@ async function ensureProfile() {
     const { data, error } = await client
         .from("profiles")
         .select("*")
-        .eq("id", user.id)
-        .single();
+        .eq("pin", pin)
+        .maybeSingle();
 
     if (error && error.code !== "PGRST116") {
         swalError("プロフィール取得失敗");
