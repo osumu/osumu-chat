@@ -496,80 +496,96 @@ function openAdd() {
 }
 
 // ===============================
-// PIN追加（既存1対1再利用）
+// PIN追加
 // ===============================
 async function addByPin(pin) {
-    const { data: target } = await client
-        .from("profiles")
-        .select("*")
-        .eq("pin", pin)
-        .single();
+    try {
+        const { data: profile, error: pErr } = await client
+            .from("profiles")
+            .select("*")
+            .eq("pin", pin)
+            .maybeSingle();
 
-    if (!target) {
-        swalError("見つかりません");
-        return;
-    }
+        if (pErr) throw pErr;
+        if (!profile) {
+            return Swal.fire("エラー", "ユーザーが見つかりません", "error");
+        }
 
-    if (target.id === user.id) {
-        swalError("自分は追加できません");
-        return;
-    }
+        const { data: myRooms } = await client
+            .from("room_members")
+            .select("room_id")
+            .eq("user_id", user.id);
 
-    const { data: myRooms } = await client
-        .from("room_members")
-        .select("room_id")
-        .eq("user_id", user.id);
+        const roomIds = (myRooms || []).map(r => r.room_id);
 
-    for (const row of myRooms || []) {
-        const { data: members } =
-            await client
+        let existingRoom = null;
+
+        if (roomIds.length > 0) {
+            const { data: members } = await client
                 .from("room_members")
-                .select("user_id")
-                .eq("room_id", row.room_id);
+                .select("*")
+                .in("room_id", roomIds);
 
-        const ids = (members || [])
-            .map(v => v.user_id)
-            .sort();
+            for (const roomId of roomIds) {
+                const users = members
+                    .filter(m => m.room_id === roomId)
+                    .map(m => m.user_id);
 
-        if (
-            ids.length === 2 &&
-            ids.includes(user.id) &&
-            ids.includes(target.id)
-        ) {
-            swalSuccess("既存部屋を再利用");
-            loadChats();
+                if (
+                    users.length === 2 &&
+                    users.includes(user.id) &&
+                    users.includes(profile.id)
+                ) {
+                    existingRoom = roomId;
+                    break;
+                }
+            }
+        }
+
+        if (existingRoom) {
+            openRoom(existingRoom, profile.name);
             return;
         }
-    }
 
-    const { data: room, error } =
-        await client
+        const { data: room, error: rErr } = await client
             .from("rooms")
             .insert({
-                name: target.name,
+                name: profile.name,
+                is_group: false
             })
             .select()
             .single();
 
-    if (error || !room) {
-        swalError("部屋作成失敗");
-        return;
+        if (rErr) throw rErr;
+
+        const { error: mErr } = await client
+            .from("room_members")
+            .insert({
+                room_id: room.id,
+                user_id: user.id
+            });
+
+        if (mErr) throw mErr;
+
+        const payload = btoa(JSON.stringify({
+            room_id: room.id
+        }));
+
+        Swal.fire({
+            title: "相手に送ってください",
+            html: `
+                <p>このQRまたは文字を相手に送ってください</p>
+                <textarea class="form-control">${payload}</textarea>
+            `
+        });
+
+        loadChats();
+
+    } catch (e) {
+        swalError(e.message);
     }
-
-    await client.from("room_members").insert([
-        {
-            room_id: room.id,
-            user_id: user.id,
-        },
-        {
-            room_id: room.id,
-            user_id: target.id,
-        },
-    ]);
-
-    swalSuccess("追加しました");
-    loadChats();
 }
+
 
 // ===============================
 // グループ作成
