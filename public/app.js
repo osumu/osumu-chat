@@ -63,6 +63,14 @@ function swalSuccess(msg) {
     Swal.fire("完了", msg, "success");
 }
 
+function encodeQR(obj) {
+    return btoa(JSON.stringify(obj));
+}
+
+function decodeQR(str) {
+    return JSON.parse(atob(str));
+}
+
 // ===============================
 // プロフィール
 // ===============================
@@ -602,45 +610,55 @@ async function createGroup() {
 // ===============================
 // QR関連
 // ===============================
-function addQR() {
-    const pin =
-        localStorage.getItem("username") ||
-        "user";
 
-    const payload = btoa(
-        JSON.stringify({
-            from: pin,
-        })
-    );
+async function handleQR(decoded) {
+    try {
+        const obj = decodeQR(decoded); // ←直接デコード
 
-    const url =
-        location.origin +
-        "/add.html?data=" +
-        payload;
+        if (obj.type === "add") {
+            await addByPin(obj.pin);
+        }
+
+        if (obj.type === "invite") {
+            await joinRoom(obj.room_id);
+        }
+
+    } catch (e) {
+        Swal.fire("エラー", "QRが不正です", "error");
+    }
+}
+
+
+async function addQR() {
+    const { data } = await client
+        .from("profiles")
+        .select("pin")
+        .eq("id", user.id)
+        .single();
+
+    const payload = encodeQR({
+        type: "add",
+        pin: data.pin
+    });
 
     Swal.fire({
-        title: "あなたのQR",
+        title: '<span class="noselect">あなたのQR</span>',
         html: `<canvas id="myQR"></canvas>`,
         didOpen: () => {
             QRCode.toCanvas(
                 document.getElementById("myQR"),
-                url
+                payload
             );
         },
+        draggable: true
     });
 }
 
 function showQR() {
-    const payload = btoa(
-        JSON.stringify({
-            room_id: currentRoom,
-        })
-    );
-
-    const url =
-        location.origin +
-        "/add.html?data=" +
-        payload;
+    const payload = encodeQR({
+        type: "invite",
+        room_id: currentRoom
+    });
 
     Swal.fire({
         title: "招待QR",
@@ -648,9 +666,9 @@ function showQR() {
         didOpen: () => {
             QRCode.toCanvas(
                 document.getElementById("roomQR"),
-                url
+                payload
             );
-        },
+        }
     });
 }
 
@@ -660,69 +678,28 @@ function scanQR() {
         showConfirmButton: false,
         html: `
         <div class="d-flex justify-content-between align-items-center mb-2">
-            <button class="btn btn-sm"
-                onclick="openAdd()">
+            <button class="btn btn-sm" onclick="Swal.close()">
                 <i class="bi bi-arrow-left"></i>
             </button>
-
             <h3 class="m-0">読み込み</h3>
             <div style="width:32px"></div>
         </div>
-
         <div id="qrReader"></div>
         `,
         didOpen: () => {
-            const qr =
-                new Html5Qrcode(
-                    "qrReader"
-                );
+            const qr = new Html5Qrcode("qrReader");
 
             qr.start(
-                {
-                    facingMode:
-                        "environment",
-                },
-                {
-                    fps: 10,
-                    qrbox: 240,
-                },
-                async decoded => {
+                { facingMode: "environment" },
+                { fps: 10, qrbox: 240 },
+                async (decoded) => {
                     await qr.stop();
                     Swal.close();
 
-                    try {
-                        const raw =
-                            decoded.split(
-                                "data="
-                            )[1];
-
-                        const obj =
-                            JSON.parse(
-                                atob(raw)
-                            );
-
-                        if (obj.from) {
-                            await addByPin(
-                                obj.from
-                            );
-                        }
-
-                        if (
-                            obj.room_id
-                        ) {
-                            await joinRoom(
-                                obj.room_id
-                            );
-                        }
-
-                    } catch {
-                        swalError(
-                            "不正なQR"
-                        );
-                    }
+                    handleQR(decoded);
                 }
             );
-        },
+        }
     });
 }
 
