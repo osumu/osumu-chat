@@ -67,34 +67,30 @@ function swalSuccess(msg) {
 // プロフィール
 // ===============================
 async function ensureProfile() {
-    const username =
-        localStorage.getItem("username") ||
-        "user_" + user.id.slice(0, 6);
+    const username = localStorage.getItem("username") || "user";
 
     const { data, error } = await client
         .from("profiles")
         .select("*")
-        .eq("pin", pin)
+        .eq("id", user.id)
         .maybeSingle();
 
-    if (error && error.code !== "PGRST116") {
-        swalError("プロフィール取得失敗");
-        return;
+    if (data) return;
+
+    if (error) {
+        Swal.fire("エラー", `エラーが発生しました：${error.message}`, "error")
     }
 
-    if (!data) {
-        const { error: insertError } =
-            await client.from("profiles").insert({
-                id: user.id,
-                username,
-                name: username,
-                pin: username,
-            });
+    const pin = String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
 
-        if (insertError) {
-            swalError("プロフィール作成失敗");
-        }
-    }
+    await client.from("profiles").insert({
+        id: user.id,
+        username,
+        name: username,
+        pin
+    });
+
+    Swal.fire("プロフィールを自動作成しました");
 }
 
 // ===============================

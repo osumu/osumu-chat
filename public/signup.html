@@ -119,19 +119,13 @@
             });
 
             if (error) {
-                if (error.message.includes("Invalid login credentials")) {
+                if (error.message.includes("Password should")) {
                     Swal.fire({
                         title: "エラー",
-                        html: `ユーザーがいません。`,
+                        html: `パスワードは6文字以上必要です。`,
                         icon: "error"
                     });
-                }
-                if (error.message.includes("Password should be at least")) {
-                    Swal.fire({
-                        title: "エラー",
-                        html: `パスワードは8文字以上必要です。`,
-                        icon: "error"
-                    });
+                    return;
                 }
                 if (error.message.includes("User already registered")) {
                     Swal.fire({
@@ -139,6 +133,7 @@
                         html: `このユーザーは既に存在します。`,
                         icon: "error"
                     });
+                    return;
                 }
                 Swal.fire("エラー", error.message, "error");
                 return;
@@ -168,6 +163,7 @@
             <button class="btn btn-primary mt-2" onclick="navigator.clipboard.writeText('${pin}')">
               コピー
             </button>
+            <br>
             <small>重要な情報です。これがないとチャットができません。<br><strong>必ず</strong>どこかにメモしておいてください。</small>
         `,
                 icon: "success"

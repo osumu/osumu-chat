@@ -93,6 +93,14 @@
             });
 
             if (error) {
+                if (error.message.includes("Invalid login credentials")) {
+                    Swal.fire({
+                        title: "エラー",
+                        html: `ユーザーがいません。`,
+                        icon: "error"
+                    });
+                    return;
+                }
                 Swal.fire({
                     title: "ログイン失敗",
                     text: error.message,
