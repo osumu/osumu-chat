@@ -504,40 +504,92 @@ function openAdd() {
         confirmButtonText: "追加",
         html: `
         <div class="text-start">
-
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h3 class="m-0">追加</h3>
-
-                <button class="btn btn-sm"
-                    onclick="Swal.close()">
+                <button class="btn btn-sm" onclick="Swal.close()">
                     <i class="bi bi-x-lg"></i>
                 </button>
             </div>
 
-            <p>PINコードを入力</p>
-            <input id="pinInput"
-                class="form-control">
+            <p>PINコード入力</p>
+            <input id="pinInput" class="form-control" placeholder="6桁のPIN">
+            <div id="pinResult" class="mt-2 small"></div>
 
-            <p class="mt-3">もしくは</p>
+            <div class="text-center my-3 text-muted">もしくは</div>
 
-            <button class="btn btn-primary w-100"
-                onclick="scanQR()">
-                QRコードを読み込み
+            <button id="qrBtn" class="btn btn-outline-primary w-100">
+                QRコードで参加
             </button>
 
         </div>
         `,
+        didOpen: () => {
+            setupPinRealtimeCheck();
+            document.getElementById("qrBtn").onclick = () => {
+                Swal.close();
+                scanQR();
+            };
+        }
     }).then(async res => {
         if (!res.isConfirmed) return;
 
-        const pin =
-            document
-                .getElementById("pinInput")
-                .value.trim();
+        const pin = document.getElementById("pinInput").value.trim();
 
         if (!pin) return;
 
         await addByPin(pin);
+    });
+}
+
+let pinTimer = null;
+
+function setupPinRealtimeCheck() {
+    const input = document.getElementById("pinInput");
+    const result = document.getElementById("pinResult");
+
+    input.addEventListener("input", () => {
+        const pin = input.value.trim();
+
+        result.innerHTML = "";
+
+        if (pinTimer) clearTimeout(pinTimer);
+
+        pinTimer = setTimeout(async () => {
+
+            const { data, error } = await client
+                .from("profiles")
+                .select("id, name, avatar")
+                .eq("pin", pin)
+                .maybeSingle();
+
+            if (error) {
+                result.innerHTML = `<span class="text-danger">エラー</span>`;
+                return;
+            }
+
+            if (!data) {
+                result.innerHTML = `<span class="text-danger">ユーザーが見つかりません</span>`;
+                return;
+            }
+
+            if (data.id === user.id) {
+                result.innerHTML = `<span class="text-warning">自分は追加できません</span>`;
+                return;
+            }
+
+            result.innerHTML = `
+                <div class="d-flex align-items-center gap-2 mt-2">
+                    <div class="avatar">
+                        ${renderAvatar(data.avatar)}
+                    </div>
+                    <div>
+                        <b>${escapeHTML(data.name)}</b><br>
+                        <small class="text-success">追加できます</small>
+                    </div>
+                </div>
+            `;
+
+        }, 400); // デバウンス
     });
 }
 
