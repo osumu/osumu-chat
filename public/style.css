@@ -6,64 +6,9 @@ body {
     background: #e5ddd5;
 }
 
-.chat-item {
-    display: flex;
-    padding: 10px;
-    border-bottom: 1px solid #ddd;
-    cursor: pointer;
-}
-
-.avatar {
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    background: #ccc;
-    margin-right: 10px;
-    background-size: cover;
-}
-
-#messages {
-    height: 60vh;
-    overflow: auto;
-    padding: 10px;
-}
-
-.bubble-me {
-    background: var(--accent);
-    color: #fff;
-    padding: 10px;
-    border-radius: 15px;
-    margin: 5px;
-    float: right;
-    max-width: 70%;
-}
-
-.bubble-you {
-    background: #fff;
-    padding: 10px;
-    border-radius: 15px;
-    margin: 5px;
-    float: left;
-    max-width: 70%;
-}
-
-.square {
-    border-radius: 5px !important;
-}
-
-.date {
-    text-align: center;
-    font-size: 12px;
-    margin: 10px 0;
-    color: #666;
-}
-
-.meta {
-    font-size: 10px;
-    color: gray;
-    text-align: right;
-}
-
+/* ===============================
+   チャット一覧
+=============================== */
 .chat-item {
     display: flex;
     align-items: center;
@@ -78,4 +23,146 @@ body {
     height: 40px;
     border-radius: 50%;
     background: #ccc;
+}
+
+/* ===============================
+   メッセージエリア
+=============================== */
+#messages {
+    height: calc(100vh - 220px);
+    overflow-y: auto;
+    padding: 10px;
+}
+
+/* 行 */
+.msg-row {
+    display: flex;
+    margin: 6px 0;
+}
+
+/* 自分（右） */
+.msg-row.me {
+    justify-content: flex-end;
+}
+
+/* 相手（左） */
+.msg-row.you {
+    justify-content: flex-start;
+}
+
+/* 吹き出し共通 */
+.bubble {
+    max-width: 70%;
+    padding: 10px 12px;
+    border-radius: 15px;
+    word-break: break-word;
+}
+
+/* 自分 */
+.bubble-me {
+    background: var(--accent);
+    color: #fff;
+}
+
+/* 相手 */
+.bubble-you {
+    background: #fff;
+    border: 1px solid #ddd;
+}
+
+/* 連続時（四角） */
+.bubble.square {
+    border-radius: 6px;
+}
+
+/* 本文 */
+.bubble .text {
+    margin-bottom: 4px;
+}
+
+/* 時刻 */
+.meta {
+    font-size: 10px;
+    color: gray;
+    text-align: right;
+}
+
+/* 日付 */
+.date {
+    text-align: center;
+    font-size: 12px;
+    margin: 10px 0;
+    color: #666;
+}
+
+/* ===============================
+   ファイル
+=============================== */
+#fileInput {
+    max-width: 150px;
+}
+
+.preview-img {
+    width: 100%;
+    border-radius: 10px;
+    margin-top: 5px;
+    cursor: pointer;
+}
+
+.preview-file {
+    margin-top: 5px;
+    padding: 8px;
+    background: #f0f0f0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.copy {
+    padding: 1rem 1.25rem;
+    border-radius: 4px;
+    background-color: #00d1b2;
+    color: #fff;
+    font-family: system-ui, sans-serif;
+    width: fit-content;
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    opacity: 0;
+    animation: fadeIn 0.4s ease forwards,
+        stay 0.5s ease 0.4s forwards,
+        fadeOut 0.4s ease 0.9s forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes stay {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
 }

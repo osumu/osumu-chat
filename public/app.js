@@ -14,15 +14,21 @@ window.onload = async () => {
     const { data } = await client.auth.getSession();
 
     if (!data.session) {
-        location.href = "public/signup.html";
+        location.href = "accounts/signup.html";
         return;
     }
 
     user = data.session.user;
 
+    if ("Notification" in window && Notification.permission !== "granted") {
+        Notification.requestPermission();
+    }
+
     await ensureProfile();
     await checkInvite();
     await loadChats();
+    applySettings();
+    applyIcon();
     subscribeMessages();
 };
 
@@ -69,6 +75,35 @@ function encodeQR(obj) {
 
 function decodeQR(str) {
     return JSON.parse(atob(str));
+}
+
+function notifyMessage(msg) {
+    const s = JSON.parse(localStorage.getItem("settings") || "{}");
+
+    if (s.notify === "off") return;
+
+    // タブ開いてる
+    if (document.visibilityState === "visible") {
+        Swal.fire({
+            toast: true,
+            position: "top-end",
+            timer: 3000,
+            showConfirmButton: false,
+            title: "新着メッセージ",
+            text: msg.content || "新しいメッセージ"
+        });
+        return;
+    }
+
+    // 通知許可チェック
+    if (Notification.permission !== "granted") {
+        Notification.requestPermission();
+        return;
+    }
+
+    new Notification("新着メッセージ", {
+        body: msg.content || "新しいメッセージ"
+    });
 }
 
 // ===============================
@@ -414,6 +449,14 @@ async function sendMsg() {
 // リアルタイム
 // ===============================
 function subscribeMessages() {
+    if (msg.sender_id !== user.id) {
+        notifyMessage(msg);
+
+        if (s?.notify !== "silent") {
+            audio.play().catch(() => { });
+        }
+    }
+
     if (channel) {
         client.removeChannel(channel);
     }
@@ -742,39 +785,246 @@ async function joinRoom(roomId) {
 // ===============================
 function openSettings() {
     Swal.fire({
-        width: 520,
+        width: "650px",
         showConfirmButton: false,
         html: `
         <div class="text-start">
 
-            <button class="btn btn-sm mb-2"
-                onclick="Swal.close()">
-                <i class="bi bi-arrow-left"></i>
+            <!-- ヘッダー -->
+            <div class="d-flex align-items-center mb-3">
+                <button class="btn btn-sm me-2" onclick="Swal.close()">
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+                <h2 class="m-0">設定</h2>
+            </div>
+
+            <!-- テーマ -->
+            <p>テーマカラー</p>
+            <select id="themeSelect" class="form-control mb-3">
+                <option value="light">ライト</option>
+                <option value="dark">ダーク</option>
+                <option value="auto">自動</option>
+                <option value="custom">カスタムカラー</option>
+            </select>
+
+            <!-- アクセント -->
+            <p>アクセントカラー</p>
+            <input id="accentColor" type="color" class="form-control form-control-color mb-3">
+
+            <!-- 背景 -->
+            <p>背景色 / 壁紙</p>
+            <input id="bgColor" type="color" class="form-control form-control-color mb-2">
+
+            <div id="dropZone"
+                style="border:2px dashed #ccc;padding:15px;text-align:center;border-radius:10px;margin-bottom:15px;">
+                ここに画像をドロップ or クリックしてアップロード
+                <input type="file" id="bgFile" hidden>
+            </div>
+
+            <!-- 吹き出し -->
+            <p>メッセージ気泡の形</p>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                ${[1, 2, 3, 4, 5, 6, 7].map(i => `
+                    <div class="bubble-style" data-style="${i}"
+                        style="width:60px;height:40px;border-radius:${i * 3}px;background:#eee;cursor:pointer;">
+                    </div>
+                `).join("")}
+            </div>
+
+            <!-- 角丸 -->
+            <p>角丸度</p>
+            <input id="radiusRange" type="range" min="0" max="30" value="15" class="form-range mb-3">
+
+            <!-- 通知 -->
+            <p>新着メッセージ通知</p>
+            <select id="notifySelect" class="form-control mb-3">
+                <option value="on">オン</option>
+                <option value="off">オフ</option>
+                <option value="silent">サイレント</option>
+            </select>
+
+            <!-- 自動削除 -->
+            <p>メッセージ自動削除</p>
+            <select id="autoDelete" class="form-control mb-3">
+                <option value="0">無期限</option>
+                <option value="1">24h</option>
+                <option value="7">7日</option>
+                <option value="30">30日</option>
+            </select>
+
+            <!-- 名前 -->
+            <p>表示名</p>
+            <input id="displayName" class="form-control mb-3">
+
+            <!-- アイコン -->
+            <p>アイコン画像</p>
+            <button class="btn btn-outline-primary mb-2" onclick="openIconPicker()">
+                アイコン選択
             </button>
 
-            <h2>設定</h2>
+            <input type="file" id="iconUpload" class="form-control mb-3">
 
-            <p>テーマカラー</p>
-            <select class="form-control mb-3">
-                <option>ライト</option>
-                <option>ダーク</option>
-                <option>自動</option>
-            </select>
+            <!-- デバイス -->
+            <p>接続デバイス管理</p>
+            <button class="btn btn-outline-dark w-100" onclick="showDevices()">
+                ログイン中の端末を見る
+            </button>
 
-            <p>アクセントカラー</p>
-            <input type="color"
-                class="form-control form-control-color mb-3">
-
-            <p>通知</p>
-            <select class="form-control mb-3">
-                <option>オン</option>
-                <option>オフ</option>
-                <option>サイレント</option>
-            </select>
+            <div class="mt-4 text-center">
+                <button class="btn btn-success" onclick="saveSettings()">保存</button>
+            </div>
 
         </div>
         `,
+        didOpen: () => {
+
+            // ドラッグ&ドロップ
+            const dz = document.getElementById("dropZone");
+
+            dz.onclick = () => document.getElementById("bgFile").click();
+
+            dz.ondragover = e => {
+                e.preventDefault();
+                dz.style.borderColor = "green";
+            };
+
+            dz.ondrop = e => {
+                e.preventDefault();
+                dz.style.borderColor = "#ccc";
+                handleBgFile(e.dataTransfer.files[0]);
+            };
+
+            document.getElementById("bgFile").onchange = e => {
+                handleBgFile(e.target.files[0]);
+            };
+
+            // 吹き出し選択
+            document.querySelectorAll(".bubble-style").forEach(el => {
+                el.onclick = () => {
+                    document.querySelectorAll(".bubble-style")
+                        .forEach(x => x.style.outline = "none");
+
+                    el.style.outline = "3px solid green";
+
+                    localStorage.setItem("bubbleStyle", el.dataset.style);
+                };
+            });
+        }
     });
+}
+
+function openIconPicker() {
+    Swal.fire({
+        width: 400,
+        showConfirmButton: false,
+        html: `
+            <div class="text-start">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="m-0">アイコン選択</h3>
+                    <button class="btn btn-sm" onclick="Swal.close()">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+
+                <div id="iconPicker"></div>
+
+                <div class="mt-3 text-center">
+                    <button class="btn btn-success" onclick="saveIcon()">決定</button>
+                </div>
+            </div>
+        `,
+        didOpen: () => {
+            window.iconPicker = new UniversalIconPicker({
+                container: "#iconPicker",
+                theme: "light",
+                size: 32
+            });
+        }
+    });
+}
+
+function saveIcon() {
+    const selected = window.iconPicker.getSelected();
+
+    if (!selected) {
+        Swal.fire("選択してください");
+        return;
+    }
+
+    localStorage.setItem("icon", selected);
+
+    applyIcon();
+
+    Swal.close();
+}
+
+function applyIcon() {
+    const icon = localStorage.getItem("icon");
+
+    if (!icon) return;
+
+    document.querySelectorAll(".avatar").forEach(el => {
+        el.innerHTML = icon;
+        el.style.display = "flex";
+        el.style.alignItems = "center";
+        el.style.justifyContent = "center";
+        el.style.fontSize = "20px";
+    });
+}
+
+function handleBgFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+        document.body.style.backgroundImage = `url(${reader.result})`;
+        localStorage.setItem("bgImage", reader.result);
+    };
+    reader.readAsDataURL(file);
+}
+
+function saveSettings() {
+    const settings = {
+        theme: document.getElementById("themeSelect").value,
+        accent: document.getElementById("accentColor").value,
+        bgColor: document.getElementById("bgColor").value,
+        radius: document.getElementById("radiusRange").value,
+        notify: document.getElementById("notifySelect").value,
+        autoDelete: document.getElementById("autoDelete").value,
+        name: document.getElementById("displayName").value
+    };
+
+    localStorage.setItem("settings", JSON.stringify(settings));
+
+    applySettings();
+
+    Swal.fire("保存しました", "", "success");
+}
+
+function applySettings() {
+    const s = JSON.parse(localStorage.getItem("settings") || "{}");
+
+    if (s.accent) {
+        document.documentElement.style.setProperty("--accent", s.accent);
+    }
+
+    if (s.bgColor) {
+        document.body.style.background = s.bgColor;
+    }
+
+    if (s.radius) {
+        document.querySelectorAll(".bubble").forEach(b => {
+            b.style.borderRadius = s.radius + "px";
+        });
+    }
+
+    if (s.theme === "dark") {
+        document.body.style.background = "#111";
+        document.body.style.color = "#fff";
+    }
+
+    if (s.theme === "light") {
+        document.body.style.background = "#e5ddd5";
+        document.body.style.color = "#000";
+    }
 }
 
 // ===============================
