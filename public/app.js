@@ -24,6 +24,7 @@ window.onload = async () => {
         Notification.requestPermission();
     }
 
+    await registerDevice();
     await ensureProfile();
     await checkInvite();
     await loadChats();
@@ -130,10 +131,9 @@ async function ensureProfile() {
         id: user.id,
         username,
         name: username,
-        pin
+        pin,
+        avatar: null
     });
-
-    Swal.fire("プロフィールを自動作成しました");
 }
 
 // ===============================
@@ -143,7 +143,7 @@ async function loadChats() {
     try {
         const { data: members, error } = await client
             .from("room_members")
-            .select("room_id")
+            .select("room_id, user_id")
             .eq("user_id", user.id);
 
         if (error) {
@@ -155,45 +155,40 @@ async function loadChats() {
 
         if (roomIds.length === 0) {
             document.getElementById("chatList").innerHTML =
-                `<p>まだ相手がいません。右上の＋ボタンで話し相手を追加しましょう。</p>`;
+                `<p>まだ相手がいません。</p>`;
             return;
         }
 
-        const { data: rooms, error: roomErr } = await client
+        const { data: rooms } = await client
             .from("rooms")
             .select("*")
             .in("id", roomIds)
             .order("created_at", { ascending: false });
 
-        if (roomErr) {
-            swalError("部屋取得失敗");
-            return;
-        }
-
-        const { data: msgs, error: msgErr } = await client
+        const { data: msgs } = await client
             .from("messages")
             .select("*")
             .in("room_id", roomIds)
             .order("created_at", { ascending: true });
 
-        if (msgErr) {
-            swalError("メッセージ取得失敗");
-            return;
-        }
+        const { data: profiles } = await client
+            .from("profiles")
+            .select("id, avatar, name");
 
-        const messages = msgs || [];
         let html = "";
 
         for (const r of rooms || []) {
-            const roomMsgs = messages.filter(
-                m => m.room_id === r.id
-            );
 
+            const roomMembers = members.filter(m => m.room_id === r.id);
+
+            const otherId = roomMembers.find(m => m.user_id !== user.id)?.user_id;
+            const p = profiles?.find(p => p.id === otherId);
+
+            const roomMsgs = msgs.filter(m => m.room_id === r.id);
             const last = roomMsgs[roomMsgs.length - 1];
 
             const unread = roomMsgs.filter(
-                m =>
-                    m.sender_id !== user.id &&
+                m => m.sender_id !== user.id &&
                     !m.read_by?.includes(user.id)
             ).length;
 
@@ -201,32 +196,23 @@ async function loadChats() {
                 <div class="chat-item"
                     onclick="openRoom('${r.id}','${escapeHTML(r.name)}')">
 
-                    <div class="avatar"></div>
+                    <div class="avatar">
+                        ${p?.avatar || "👤"}
+                    </div>
 
                     <div style="flex:1">
                         <b>${escapeHTML(r.name)}</b><br>
                         <small>
-                            ${escapeHTML(
-                last?.content ||
-                "メッセージなし"
-            )}
+                            ${escapeHTML(last?.content || "メッセージなし")}
                         </small>
                     </div>
 
                     <div>
-                        ${unread > 0
-                    ? `<span class="badge bg-danger">${unread}</span>`
-                    : ""
-                }
+                        ${unread > 0 ? `<span class="badge bg-danger">${unread}</span>` : ""}
                     </div>
 
                 </div>
             `;
-        }
-
-        if (!html) {
-            html =
-                `<p>まだ相手がいません。右上の＋ボタンで話し相手を追加しましょう。</p>`;
         }
 
         document.getElementById("chatList").innerHTML = html;
@@ -235,6 +221,7 @@ async function loadChats() {
         swalError("一覧読み込み失敗");
     }
 }
+
 
 // ===============================
 // ルーム開く
@@ -282,44 +269,37 @@ function backList() {
 async function loadMessages() {
     if (!currentRoom) return;
 
-    const { data, error } = await client
+    const { data: messages } = await client
         .from("messages")
         .select("*")
         .eq("room_id", currentRoom)
         .order("created_at", { ascending: true });
 
-    if (error) {
-        swalError("メッセージ取得失敗");
-        return;
-    }
+    const { data: profiles } = await client
+        .from("profiles")
+        .select("id, avatar");
 
     let html = "";
     let lastUser = null;
 
-    (data || []).forEach(m => {
+    (messages || []).forEach(m => {
+
         const isMe = m.sender_id === user.id;
 
-        let cls = isMe
-            ? "bubble-me"
-            : "bubble-you";
+        const avatar = getMessageAvatar(m, profiles);
+
+        let cls = isMe ? "bubble-me" : "bubble-you";
 
         if (!isMe && lastUser === m.sender_id) {
             cls += " square";
         }
 
-        const attachment = m.file_url
-            ? `
-            <button
-                class="btn btn-sm btn-light mt-1"
-                onclick="loadFile('${m.file_url}')">
-                添付表示
-            </button>`
-            : "";
-
         html += `
             <div class="${cls}">
+
+                ${!isMe ? `<div class="avatar-inline">${avatar}</div>` : ""}
+
                 ${escapeHTML(m.content || "")}
-                ${attachment}
 
                 <div class="meta">
                     ${formatDate(m.created_at)}
@@ -331,13 +311,7 @@ async function loadMessages() {
         lastUser = m.sender_id;
     });
 
-    document.getElementById("messages").innerHTML =
-        html;
-
-    await markAsReadBatch();
-
-    const box = document.getElementById("messages");
-    box.scrollTop = box.scrollHeight;
+    document.getElementById("messages").innerHTML = html;
 }
 
 // ===============================
@@ -449,14 +423,6 @@ async function sendMsg() {
 // リアルタイム
 // ===============================
 function subscribeMessages() {
-    if (msg.sender_id !== user.id) {
-        notifyMessage(msg);
-
-        if (s?.notify !== "silent") {
-            audio.play().catch(() => { });
-        }
-    }
-
     if (channel) {
         client.removeChannel(channel);
     }
@@ -470,22 +436,27 @@ function subscribeMessages() {
                 schema: "public",
                 table: "messages",
             },
-            payload => {
+            (payload) => {
                 const msg = payload.new;
 
-                if (
-                    currentRoom &&
-                    msg.room_id === currentRoom
-                ) {
+                // 自分以外のメッセージ通知
+                if (msg.sender_id !== user.id) {
+
+                    const s = JSON.parse(localStorage.getItem("settings") || "{}");
+
+                    notifyMessage(msg);
+
+                    if (s.notify !== "silent") {
+                        audio.play().catch(() => { });
+                    }
+                }
+
+                // 現在開いてるルームなら更新
+                if (currentRoom && msg.room_id === currentRoom) {
                     loadMessages();
                 }
 
-                if (
-                    msg.sender_id !== user.id
-                ) {
-                    audio.play().catch(() => { });
-                }
-
+                // チャット一覧更新
                 loadChats();
             }
         )
@@ -913,6 +884,95 @@ function openSettings() {
     });
 }
 
+function getDeviceId() {
+    let id = localStorage.getItem("device_id");
+
+    if (!id) {
+        id = crypto.randomUUID();
+        localStorage.setItem("device_id", id);
+    }
+
+    return id;
+}
+
+async function registerDevice() {
+    const deviceId = getDeviceId();
+
+    const { data, error } = await client
+        .from("devices")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("device_id", deviceId)
+        .maybeSingle();
+
+    if (error) {
+        console.error(error);
+        return;
+    }
+
+    // 既にあるなら更新だけ
+    if (data) {
+        await client
+            .from("devices")
+            .update({
+                last_seen: new Date().toISOString(),
+                browser: platform.name,
+                os: platform.os?.family
+            })
+            .eq("id", data.id);
+
+        return;
+    }
+
+    // 無ければ作成
+    await client.from("devices").insert({
+        user_id: user.id,
+        device_id: deviceId,
+        browser: platform.name,
+        os: platform.os?.family,
+        last_seen: new Date().toISOString()
+    });
+}
+
+async function showDevices() {
+    const { data, error } = await client
+        .from("devices")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("last_seen", { ascending: false });
+
+    if (error) {
+        swalError("取得失敗");
+        return;
+    }
+
+    const html = (data || []).map(d => `
+        <div style="padding:10px;border-bottom:1px solid #eee">
+            <b>${escapeHTML(d.browser || "unknown")}</b><br>
+            <small>${escapeHTML(d.os || "unknown")}</small><br>
+            <small>最終アクセス: ${formatDate(d.last_seen)}</small>
+        </div>
+    `).join("");
+
+    Swal.fire({
+        title: "ログイン中の端末",
+        html: html || "端末なし"
+    });
+}
+
+async function logoutDevice() {
+    const deviceId = getDeviceId();
+
+    await client
+        .from("devices")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("device_id", deviceId);
+
+    await client.auth.signOut();
+    location.href = "/";
+}
+
 function openIconPicker() {
     Swal.fire({
         width: 400,
@@ -943,7 +1003,7 @@ function openIconPicker() {
     });
 }
 
-function saveIcon() {
+async function saveIcon() {
     const selected = window.iconPicker.getSelected();
 
     if (!selected) {
@@ -951,25 +1011,76 @@ function saveIcon() {
         return;
     }
 
-    localStorage.setItem("icon", selected);
+    await client
+        .from("profiles")
+        .update({ avatar: selected })
+        .eq("id", user.id);
 
     applyIcon();
-
     Swal.close();
 }
 
-function applyIcon() {
-    const icon = localStorage.getItem("icon");
+async function applyIcon() {
+    const { data } = await client
+        .from("profiles")
+        .select("avatar")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    if (!icon) return;
+    if (!data?.avatar) return;
 
     document.querySelectorAll(".avatar").forEach(el => {
-        el.innerHTML = icon;
+        el.innerHTML = data.avatar;
         el.style.display = "flex";
         el.style.alignItems = "center";
         el.style.justifyContent = "center";
         el.style.fontSize = "20px";
     });
+}
+
+
+async function uploadAvatar(file) {
+    const path = `avatars/${user.id}/${crypto.randomUUID()}_${file.name}`;
+
+    const { error } = await client.storage
+        .from("files")
+        .upload(path, file);
+
+    if (error) throw error;
+
+    const { data } = client.storage
+        .from("files")
+        .getPublicUrl(path);
+
+    return data.publicUrl;
+}
+
+async function saveIconFromFile(file) {
+    const url = await uploadAvatar(file);
+
+    await client
+        .from("profiles")
+        .update({ avatar: url })
+        .eq("id", user.id);
+
+    applyIcon();
+}
+
+document.getElementById("iconUpload").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    await saveIconFromFile(file);
+});
+
+function renderAvatar(avatar) {
+    if (!avatar) return "👤";
+
+    if (avatar.startsWith("http")) {
+        return `<img src="${avatar}" style="width:32px;height:32px;border-radius:50%">`;
+    }
+
+    return avatar; // 絵文字
 }
 
 function handleBgFile(file) {
@@ -1145,3 +1256,4 @@ function loadFile(url) {
 
     window.open(url, "_blank");
 }
+
