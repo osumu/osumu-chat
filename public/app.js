@@ -30,9 +30,41 @@ window.onload = async () => {
     await loadChats();
     applySettings();
     applyIcon();
+
+    if (!localStorage.getItem("avatar_prompt_shown")) {
+        showAvatarPrompt();
+    }
+
+
     subscribeMessages();
 };
 
+function showAvatarPrompt() {
+    Swal.fire({
+        title: "ようこそ！",
+        html: `<button class="btn btn-success" id="sa">アバターを設定しましょう！</button>`,
+        icon: "data:image/svg+xml,%3Csvg%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2064%2064%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2232%22%20r%3D%2228%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%224%22/%3E%3Ccircle%20cx%3D%2223%22%20cy%3D%2226%22%20r%3D%224%22%20fill%3D%22currentColor%22/%3E%3Cpath%20d%3D%22M38%2026%20Q42%2022%2046%2026%22%20stroke%3D%22currentColor%22%20stroke-width%3D%224%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22/%3E%3Cpath%20d%3D%22M22%2040%20Q32%2048%2042%2040%22%20stroke%3D%22currentColor%22%20stroke-width%3D%224%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E",
+        showConfirmButton: false,
+        didOpen: () => {
+            document.getElementById("sa").onclick = () => {
+                localStorage.setItem("avatar_prompt_shown", "1");
+                Swal.close();
+
+                openSettings();
+                // 少し待ってからスクロール
+                setTimeout(() => {
+                    const el = document.getElementById("asection");
+                    if (!el) return;
+
+                    el.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center"
+                    });
+                }, 300);
+            };
+        }
+    });
+}
 
 // ===============================
 // 共通
@@ -828,7 +860,7 @@ function openSettings() {
             <input id="displayName" class="form-control mb-3">
 
             <!-- アイコン -->
-            <p>アイコン画像</p>
+            <p class="asection">アイコン画像</p>
             <button class="btn btn-outline-primary mb-2" onclick="openIconPicker()">
                 アイコン選択
             </button>
@@ -879,6 +911,15 @@ function openSettings() {
 
                     localStorage.setItem("bubbleStyle", el.dataset.style);
                 };
+            });
+
+            const input = document.getElementById("iconUpload");
+
+            input.addEventListener("change", async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                await saveIconFromFile(file);
             });
         }
     });
@@ -1065,13 +1106,6 @@ async function saveIconFromFile(file) {
 
     applyIcon();
 }
-
-document.getElementById("iconUpload").addEventListener("change", async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    await saveIconFromFile(file);
-});
 
 function renderAvatar(avatar) {
     if (!avatar) return "👤";
