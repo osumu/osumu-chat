@@ -1,24 +1,3 @@
-if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/service-worker.js");
-}
-
-console.log(`                                                                                                                                                                                                                                                                                                                                                                                                                  
- .d88b.  .d8888. db    db .88b  d88. db    db
-.8P  Y8. 88'  YP 88    88 88'YbdP'88 88    88
-88    88 '8bo.   88    88 88  88  88 88    88
-88    88   'Y8b. 88    88 88  88  88 88    88
-'8b  d8' db   8D 88b  d88 88  88  88 88b  d88
- 'Y88P'  '8888Y' ~Y8888P' YP  YP  YP ~Y8888P'
-
-
- .o88b. db   db  .d8b.  d888888b
-d8P  Y8 88   88 d8' '8b '~~88~~'
-8P      88ooo88 88ooo88    88
-8b      88~~~88 88~~~88    88
-Y8b  d8 88   88 88   88    88
- 'Y88P' YP   YP YP   YP    YP
-`)
-
 const client = supabase.createClient("https://acebtnoxoijpurwvpisr.supabase.co", "sb_publishable_zgLg3lODrTUNc2JDa1aoXA_epBmQ3Zx");
 
 let user = null;
@@ -344,6 +323,8 @@ async function loadMessages() {
         const rowClass = isMe ? "msg-row me" : "msg-row you";
 
         let bubbleClass = isMe ? "bubble bubble-me" : "bubble bubble-you";
+
+        const style = localStorage.getItem("bubbleStyle") || "tail";
 
         if (style === "round") {
             bubbleClass += " round";
