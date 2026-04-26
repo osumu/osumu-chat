@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>チャット</title>
 
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="manifest.json">
 
 
     <link rel="icon" type="image/x-icon" href="favicon.ico">
@@ -109,6 +109,13 @@
             </div>
         </div>
     </div>
+    <script>
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("service-worker.js");
+        }
+    </script>
+    <script
+        src="data:text/javascript;base64,Y29uc29sZS5sb2coYAogLmQ4OGIuICAuZDg4ODguIGRiICAgIGRiIC44OGIgIGQ4OC4gZGIgICAgZGIKLjhQICBZOC4gODgnICBZUCA4OCAgICA4OCA4OCdZYmRQJzg4IDg4ICAgIDg4Cjg4ICAgIDg4ICc4Ym8uICAgODggICAgODggODggIDg4ICA4OCA4OCAgICA4OAo4OCAgICA4OCAgICdZOGIuIDg4ICAgIDg4IDg4ICA4OCAgODggODggICAgODgKJzhiICBkOCcgZGIgICA4RCA4OGIgIGQ4OCA4OCAgODggIDg4IDg4YiAgZDg4CiAnWTg4UCcgICc4ODg4WScgflk4ODg4UCcgWVAgIFlQICBZUCB+WTg4ODhQJwoKCiAubzg4Yi4gZGIgICBkYiAgLmQ4Yi4gIGQ4ODg4ODhiCmQ4UCAgWTggODggICA4OCBkOCcgJzhiICd+fjg4fn4nCjhQICAgICAgODhvb284OCA4OG9vbzg4ICAgIDg4CjhiICAgICAgODh+fn44OCA4OH5+fjg4ICAgIDg4Clk4YiAgZDggODggICA4OCA4OCAgIDg4ICAgIDg4CiAnWTg4UCcgWVAgICBZUCBZUCAgIFlQICAgIFlQCmAp"></script>
     <script src="public/app.js"></script>
 </body>
 
