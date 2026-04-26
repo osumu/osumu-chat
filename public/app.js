@@ -229,7 +229,7 @@ async function loadChats() {
                     onclick="openRoom('${r.id}','${escapeHTML(r.name)}')">
 
                     <div class="avatar">
-                        ${p?.avatar || "👤"}
+                        ${renderAvatar(p?.avatar)}
                     </div>
 
                     <div style="flex:1">
@@ -539,6 +539,14 @@ function openAdd() {
 
         await addByPin(pin);
     });
+}
+
+function getMessageAvatar(message, profiles) {
+    const senderProfile = profiles?.find(
+        p => p.id === message.sender_id
+    );
+
+    return renderAvatar(senderProfile?.avatar);
 }
 
 let pinTimer = null;
@@ -1133,16 +1141,16 @@ async function applyIcon() {
 
 
 async function uploadAvatar(file) {
-    const path = `avatars/${user.id}/${crypto.randomUUID()}_${file.name}`;
+    const path = `${user.id}/${crypto.randomUUID()}_${file.name}`;
 
     const { error } = await client.storage
-        .from("files")
+        .from("avatars") // ←変更
         .upload(path, file);
 
     if (error) throw error;
 
     const { data } = client.storage
-        .from("files")
+        .from("avatars") // ←変更
         .getPublicUrl(path);
 
     return data.publicUrl;
@@ -1163,10 +1171,13 @@ function renderAvatar(avatar) {
     if (!avatar) return "👤";
 
     if (avatar.startsWith("http")) {
-        return `<img src="${avatar}" style="width:32px;height:32px;border-radius:50%">`;
+        return `
+            <img src="${escapeHTML(avatar)}"
+                style="width:32px;height:32px;border-radius:50%;object-fit:cover">
+        `;
     }
 
-    return avatar; // 絵文字
+    return escapeHTML(avatar); // 絵文字
 }
 
 function handleBgFile(file) {
