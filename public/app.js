@@ -1,3 +1,24 @@
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/service-worker.js");
+}
+
+console.log(`                                                                                                                                                                                                                                                                                                                                                                                                                  
+ .d88b.  .d8888. db    db .88b  d88. db    db
+.8P  Y8. 88'  YP 88    88 88'YbdP'88 88    88
+88    88 '8bo.   88    88 88  88  88 88    88
+88    88   'Y8b. 88    88 88  88  88 88    88
+'8b  d8' db   8D 88b  d88 88  88  88 88b  d88
+ 'Y88P'  '8888Y' ~Y8888P' YP  YP  YP ~Y8888P'
+
+
+ .o88b. db   db  .d8b.  d888888b
+d8P  Y8 88   88 d8' '8b '~~88~~'
+8P      88ooo88 88ooo88    88
+8b      88~~~88 88~~~88    88
+Y8b  d8 88   88 88   88    88
+ 'Y88P' YP   YP YP   YP    YP
+`)
+
 const client = supabase.createClient("https://acebtnoxoijpurwvpisr.supabase.co", "sb_publishable_zgLg3lODrTUNc2JDa1aoXA_epBmQ3Zx");
 
 let user = null;
@@ -320,24 +341,40 @@ async function loadMessages() {
 
         const avatar = getMessageAvatar(m, profiles);
 
-        let cls = isMe ? "bubble-me" : "bubble-you";
+        const rowClass = isMe ? "msg-row me" : "msg-row you";
+
+        let bubbleClass = isMe ? "bubble bubble-me" : "bubble bubble-you";
+
+        if (style === "round") {
+            bubbleClass += " round";
+        }
+        if (style === "square") {
+            bubbleClass += " square";
+        }
+        if (style === "tail") {
+            bubbleClass += " tail";
+        }
 
         if (!isMe && lastUser === m.sender_id) {
-            cls += " square";
+            bubbleClass += " square";
         }
 
         html += `
-            <div class="${cls}">
-
+            <div class="${rowClass}">
+                
                 ${!isMe ? `<div class="avatar-inline">${avatar}</div>` : ""}
 
-                ${escapeHTML(m.content || "")}
+                <div class="${bubbleClass}">
+                    <div class="text">
+                        ${escapeHTML(m.content || "")}
+                    </div>
 
-                <div class="meta">
-                    ${formatDate(m.created_at)}
+                    <div class="meta">
+                        ${formatDate(m.created_at)}
+                    </div>
                 </div>
+
             </div>
-            <div style="clear:both"></div>
         `;
 
         lastUser = m.sender_id;
@@ -851,17 +888,15 @@ function openSettings() {
         width: "650px",
         showConfirmButton: false,
         html: `
-        <div class="text-start">
+        <div class="text-start" id="settingsWrap">
 
-            <!-- ヘッダー -->
             <div class="d-flex align-items-center mb-3">
                 <button class="btn btn-sm me-2" onclick="Swal.close()">
-                    <i class="bi bi-arrow-left"></i>
+                    ←
                 </button>
                 <h2 class="m-0">設定</h2>
             </div>
 
-            <!-- テーマ -->
             <p>テーマカラー</p>
             <select id="themeSelect" class="form-control mb-3">
                 <option value="light">ライト</option>
@@ -870,35 +905,30 @@ function openSettings() {
                 <option value="custom">カスタムカラー</option>
             </select>
 
-            <!-- アクセント -->
             <p>アクセントカラー</p>
-            <input id="accentColor" type="color" class="form-control form-control-color mb-3">
+            <input id="accentColor" type="color" class="form-control mb-3">
 
-            <!-- 背景 -->
             <p>背景色 / 壁紙</p>
-            <input id="bgColor" type="color" class="form-control form-control-color mb-2">
+            <input id="bgColor" type="color" class="form-control mb-2">
 
             <div id="dropZone"
                 style="border:2px dashed #ccc;padding:15px;text-align:center;border-radius:10px;margin-bottom:15px;">
-                ここに画像をドロップ or クリックしてアップロード
+                ここに画像をドロップ or <button class="btn btn-link">クリック</button>
                 <input type="file" id="bgFile" hidden>
             </div>
 
-            <!-- 吹き出し -->
             <p>メッセージ気泡の形</p>
             <div class="d-flex flex-wrap gap-2 mb-3">
-                ${[1, 2, 3, 4, 5, 6, 7].map(i => `
+                ${[1, 2, 3].map(i => `
                     <div class="bubble-style" data-style="${i}"
-                        style="width:60px;height:40px;border-radius:${i * 3}px;background:#eee;cursor:pointer;">
+                        style="width:60px;height:40px;border-radius:${i === 1 ? 15 : i === 2 ? 999 : 6}px;background:#eee;cursor:pointer;">
                     </div>
                 `).join("")}
             </div>
 
-            <!-- 角丸 -->
             <p>角丸度</p>
             <input id="radiusRange" type="range" min="0" max="30" value="15" class="form-range mb-3">
 
-            <!-- 通知 -->
             <p>新着メッセージ通知</p>
             <select id="notifySelect" class="form-control mb-3">
                 <option value="on">オン</option>
@@ -906,7 +936,6 @@ function openSettings() {
                 <option value="silent">サイレント</option>
             </select>
 
-            <!-- 自動削除 -->
             <p>メッセージ自動削除</p>
             <select id="autoDelete" class="form-control mb-3">
                 <option value="0">無期限</option>
@@ -915,19 +944,18 @@ function openSettings() {
                 <option value="30">30日</option>
             </select>
 
-            <!-- 名前 -->
             <p>表示名</p>
             <input id="displayName" class="form-control mb-3">
 
-            <!-- アイコン -->
+            <!-- 👇スクロール対象 -->
             <p class="asection">アイコン画像</p>
+
             <button class="btn btn-outline-primary mb-2" onclick="openIconPicker()">
                 アイコン選択
             </button>
 
             <input type="file" id="iconUpload" class="form-control mb-3">
 
-            <!-- デバイス -->
             <p>接続デバイス管理</p>
             <button class="btn btn-outline-dark w-100" onclick="showDevices()">
                 ログイン中の端末を見る
@@ -941,7 +969,9 @@ function openSettings() {
         `,
         didOpen: () => {
 
-            // ドラッグ&ドロップ
+            // ===============================
+            // 背景アップロード
+            // ===============================
             const dz = document.getElementById("dropZone");
 
             dz.onclick = () => document.getElementById("bgFile").click();
@@ -961,18 +991,37 @@ function openSettings() {
                 handleBgFile(e.target.files[0]);
             };
 
-            // 吹き出し選択
+            // ===============================
+            // 吹き出しスタイル
+            // ===============================
+            const map = {
+                "1": "tail",
+                "2": "round",
+                "3": "square"
+            };
+
+            const current = localStorage.getItem("bubbleStyle") || "tail";
+
             document.querySelectorAll(".bubble-style").forEach(el => {
+
+                // 初期選択
+                if (map[el.dataset.style] === current) {
+                    el.style.outline = "3px solid green";
+                }
+
                 el.onclick = () => {
                     document.querySelectorAll(".bubble-style")
                         .forEach(x => x.style.outline = "none");
 
                     el.style.outline = "3px solid green";
 
-                    localStorage.setItem("bubbleStyle", el.dataset.style);
+                    localStorage.setItem("bubbleStyle", map[el.dataset.style]);
                 };
             });
 
+            // ===============================
+            // アイコンアップロード
+            // ===============================
             const input = document.getElementById("iconUpload");
 
             input.addEventListener("change", async (e) => {
@@ -981,8 +1030,26 @@ function openSettings() {
 
                 await saveIconFromFile(file);
             });
+
+            // ===============================
+            // スクロール（アイコンへ）
+            // ===============================
+            setTimeout(() => {
+                const target = document.querySelector(".asection");
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center"
+                    });
+                }
+            }, 200);
         }
     });
+}
+
+function setBubbleStyle(style) {
+    localStorage.setItem("bubbleStyle", style);
+    loadMessages(); // 即反映
 }
 
 function getDeviceId() {
