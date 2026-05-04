@@ -162,26 +162,28 @@ function notifyMessage(msg) {
 
 let avatarCache = null;
 
+let myAvatar = null;
+
 async function applyIcon(force = false) {
-    const { data } = await client
+    const { data, error } = await client
         .from("profiles")
         .select("avatar")
         .eq("id", user.id)
         .maybeSingle();
 
-    if (!force && avatarCache === data?.avatar) return;
+    if (error) {
+        console.error(error);
+        return;
+    }
 
-    avatarCache = data?.avatar;
+    if (!force && myAvatar === data?.avatar) return;
 
-    const avatarHTML = renderAvatar(data?.avatar);
+    myAvatar = data?.avatar;
 
-    document.querySelectorAll(".avatar").forEach(el => {
-        el.innerHTML = avatarHTML;
-    });
-
-    document.querySelectorAll(".avatar-inline").forEach(el => {
-        el.innerHTML = avatarHTML;
-    });
+    const el = document.getElementById("myAvatar");
+    if (el) {
+        el.innerHTML = renderAvatar(data?.avatar);
+    }
 }
 
 
@@ -219,47 +221,129 @@ async function ensureProfile() {
 // チャット一覧
 // ===============================
 async function loadChats() {
-    const { data: members } = await client
-        .from("room_members")
-        .select("room_id")
-        .eq("user_id", user.id);
+    try {
+        const chatList = document.getElementById("chatList");
 
-    const roomIds = [...new Set(members?.map(m => m.room_id) || [])];
+        const { data: members, error } = await client
+            .from("room_members")
+            .select("room_id, user_id")
+            .eq("user_id", user.id);
 
-    if (!roomIds.length) {
-        document.getElementById("chatList").innerHTML = `<p>まだ相手がいません。</p>`;
-        return;
+        if (error) {
+            swalError("部屋一覧取得失敗");
+            return;
+        }
+
+        const roomIds = [...new Set((members || []).map(m => m.room_id))];
+
+        if (!roomIds.length) {
+            chatList.innerHTML = `<p>まだ相手がいません。</p>`;
+            return;
+        }
+
+        const [{ data: rooms }, { data: lastMsgs }] = await Promise.all([
+            client
+                .from("rooms")
+                .select("id, name, is_group, created_at")
+                .in("id", roomIds)
+                .order("created_at", { ascending: false }),
+
+            client.rpc("get_last_messages", {
+                room_ids: roomIds
+            })
+        ]);
+
+        const { data: allMembers } = await client
+            .from("room_members")
+            .select("room_id, user_id")
+            .in("room_id", roomIds);
+
+        const otherIds = [];
+
+        for (const room of rooms || []) {
+            if (room.is_group) continue;
+
+            const roomUsers = allMembers
+                ?.filter(m => m.room_id === room.id);
+
+            const other = roomUsers
+                ?.find(m => m.user_id !== user.id);
+
+            if (other) {
+                otherIds.push(other.user_id);
+            }
+        }
+
+        const uniqueOtherIds = [...new Set(otherIds)];
+
+        const { data: profiles } = uniqueOtherIds.length
+            ? await client
+                .from("profiles")
+                .select("id, avatar, name")
+                .in("id", uniqueOtherIds)
+            : { data: [] };
+
+        const memberMap = new Map();
+
+        for (const m of allMembers || []) {
+            if (!memberMap.has(m.room_id)) {
+                memberMap.set(m.room_id, []);
+            }
+
+            memberMap.get(m.room_id).push(m.user_id);
+        }
+
+        const profileMap = new Map(
+            (profiles || []).map(p => [p.id, p])
+        );
+
+        const lastMap = new Map(
+            (lastMsgs || []).map(m => [m.room_id, m])
+        );
+
+        let html = "";
+
+        for (const room of rooms || []) {
+            const last = lastMap.get(room.id);
+
+            let name = room.name;
+            let avatarHTML = `<i class="fa fa-circle-user"></i>`;
+
+            if (!room.is_group) {
+                const users = memberMap.get(room.id) || [];
+                const otherId = users.find(id => id !== user.id);
+
+                const profile = profileMap.get(otherId);
+
+                name = profile?.name || room.name;
+                avatarHTML = renderAvatar(profile?.avatar);
+            }
+
+            html += `
+                <div class="chat-item"
+                    onclick="openRoom('${room.id}','${escapeHTML(name)}')">
+
+                    <div class="avatar">
+                        ${avatarHTML}
+                    </div>
+
+                    <div style="flex:1">
+                        <b>${escapeHTML(name)}</b><br>
+                        <small>
+                            ${escapeHTML(last?.content || "メッセージなし")}
+                        </small>
+                    </div>
+
+                </div>
+            `;
+        }
+
+        chatList.innerHTML = html;
+
+    } catch (e) {
+        console.error(e);
+        swalError("一覧読み込み失敗");
     }
-
-    const { data: rooms } = await client
-        .from("rooms")
-        .select("*")
-        .in("id", roomIds);
-
-    const { data: lastMsgs } = await client
-        .rpc("get_last_messages", { room_ids: roomIds });
-
-    const { data: profiles } = await client
-        .from("profiles")
-        .select("id, avatar, name")
-        .in("id", roomIds); // ここは最適化余地あり
-
-    let html = "";
-
-    for (const r of rooms || []) {
-        const last = lastMsgs?.find(m => m.room_id === r.id);
-
-        html += `
-        <div class="chat-item" onclick="openRoom('${r.id}','${escapeHTML(r.name)}')">
-            <div class="avatar">👤</div>
-            <div style="flex:1">
-                <b>${escapeHTML(r.name)}</b><br>
-                <small>${escapeHTML(last?.content || "メッセージなし")}</small>
-            </div>
-        </div>`;
-    }
-
-    document.getElementById("chatList").innerHTML = html;
 }
 
 // ===============================
