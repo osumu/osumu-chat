@@ -11,12 +11,22 @@ const audio = new Audio("public/notification.mp3");
 // 起動
 // ===============================
 window.onload = async () => {
-    const { data } = await client.auth.getSession();
+    const { data: { session } } = await client.auth.getSession();
 
-    if (!data.session) {
+    if (!session) {
         location.href = "accounts/signup.html";
         return;
     }
+
+    const { data: { user: authUser }, error } = await client.auth.getUser();
+
+    if (error || !authUser) {
+        await client.auth.signOut();
+        localStorage.clear();
+        location.href = "accounts/signup.html";
+        return;
+    }
+
 
     user = data.session.user;
 
@@ -160,8 +170,6 @@ function notifyMessage(msg) {
     }
 }
 
-let avatarCache = null;
-
 let myAvatar = null;
 
 async function applyIcon(force = false) {
@@ -176,13 +184,17 @@ async function applyIcon(force = false) {
         return;
     }
 
-    if (!force && myAvatar === data?.avatar) return;
+    const avatar = data?.avatar ?? null;
 
-    myAvatar = data?.avatar;
+    if (!force && myAvatar === avatar) {
+        return;
+    }
+
+    myAvatar = avatar;
 
     const el = document.getElementById("myAvatar");
     if (el) {
-        el.innerHTML = renderAvatar(data?.avatar);
+        el.innerHTML = renderAvatar(avatar);
     }
 }
 
@@ -213,7 +225,7 @@ async function ensureProfile() {
         username,
         name: username,
         pin,
-        avatar: null
+        avatar: `<i class="fa-solid fa-circle-user"></i>`
     });
 }
 
@@ -1176,7 +1188,7 @@ function openIconPicker() {
             const options = {
                 iconLibraries: ['font-awesome.min.json'],
                 iconLibrariesCss: [
-                    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'
+                    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css'
                 ],
 
                 onSelect: async (icon) => {
@@ -1228,7 +1240,9 @@ async function saveIconFromFile(file) {
 }
 
 function renderAvatar(avatar) {
-    if (!avatar) return "👤";
+    const fallback = `<i class="fa-solid fa-circle-user"></i>`;
+
+    if (!avatar) return fallback;
 
     if (avatar.startsWith("http")) {
         return `
@@ -1237,7 +1251,11 @@ function renderAvatar(avatar) {
         `;
     }
 
-    return escapeHTML(avatar); // 絵文字
+    if (avatar.trim().startsWith("<i")) {
+        return avatar;
+    }
+
+    return escapeHTML(avatar);
 }
 
 function handleBgFile(file) {
