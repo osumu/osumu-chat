@@ -5,11 +5,8 @@ window.currentRoom = null;
 let channel = null;
 let sending = false;
 
-const audio = new Audio("notification.mp3");
+const audio = new Audio("public/notification.mp3");
 
-// ===============================
-// 起動
-// ===============================
 window.onload = async () => {
     const { data: { session } } = await client.auth.getSession();
 
@@ -27,30 +24,27 @@ window.onload = async () => {
         return;
     }
 
-
-    user = data.session.user;
+    user = authUser;
 
     document.getElementById("deleteBtn").onclick = () => {
         confirmDeleteRoom(window.currentRoom);
     };
 
-
     await registerDevice();
     await ensureProfile();
     await checkInvite();
     await loadChats();
+
     checkNotificationPermission();
     applySettings();
-    applyIcon();
+    await applyIcon();
 
     if (!localStorage.getItem("avatar_prompt_shown")) {
         showAvatarPrompt();
     }
 
-
     subscribeMessages();
 };
-
 
 async function checkNotificationPermission() {
     if (!("Notification" in window)) return;
@@ -102,9 +96,9 @@ function showAvatarPrompt() {
     });
 }
 
-// ===============================
+
 // 共通
-// ===============================
+
 function escapeHTML(str = "") {
     return String(str)
         .replace(/&/g, "&amp;")
@@ -199,9 +193,9 @@ async function applyIcon(force = false) {
 }
 
 
-// ===============================
+
 // プロフィール
-// ===============================
+
 async function ensureProfile() {
     const username = localStorage.getItem("username") || "user";
 
@@ -393,9 +387,9 @@ async function saveProfile() {
     swalSuccess("プロフィールを更新しました");
 }
 
-// ===============================
+
 // チャット一覧
-// ===============================
+
 async function loadChats() {
     try {
         const chatList = document.getElementById("chatList");
@@ -522,9 +516,9 @@ async function loadChats() {
     }
 }
 
-// ===============================
+
 // ルーム開く
-// ===============================
+
 async function openRoom(id, name) {
     currentRoom = id;
 
@@ -549,9 +543,9 @@ async function openRoom(id, name) {
     await loadMessages();
 }
 
-// ===============================
+
 // 戻る
-// ===============================
+
 function backList() {
     document.getElementById("chatRoom").style.display =
         "none";
@@ -562,9 +556,9 @@ function backList() {
     currentRoom = null;
 }
 
-// ===============================
+
 // メッセージ一覧
-// ===============================
+
 async function loadMessages() {
     if (!currentRoom) return;
 
@@ -613,9 +607,9 @@ async function loadMessages() {
     document.getElementById("messages").innerHTML = html;
 }
 
-// ===============================
+
 // 一括既読
-// ===============================
+
 async function markAsReadBatch() {
     const { error } = await client.rpc("mark_messages_read", {
         p_room_id: currentRoom,
@@ -625,9 +619,9 @@ async function markAsReadBatch() {
     if (error) console.error(error);
 }
 
-// ===============================
+
 // 送信
-// ===============================
+
 async function sendMsg() {
     if (sending) return;
 
@@ -683,9 +677,9 @@ async function sendMsg() {
     }
 }
 
-// ===============================
+
 // リアルタイム
-// ===============================
+
 function subscribeMessages() {
     if (channel) {
         client.removeChannel(channel);
@@ -693,9 +687,9 @@ function subscribeMessages() {
 
     channel = client.channel("chat-realtime")
 
-        // ===============================
+
         // メッセージ受信
-        // ===============================
+
         .on("postgres_changes", {
             event: "INSERT",
             schema: "public",
@@ -726,9 +720,9 @@ function subscribeMessages() {
             loadChats();
         })
 
-        // ===============================
+
         // ルーム参加検知（重要）
-        // ===============================
+
         .on("postgres_changes", {
             event: "INSERT",
             schema: "public",
@@ -753,9 +747,9 @@ function subscribeMessages() {
         .subscribe();
 }
 
-// ===============================
+
 // 追加
-// ===============================
+
 function openAdd() {
     Swal.fire({
         width: 420,
@@ -859,9 +853,9 @@ function setupPinRealtimeCheck() {
     });
 }
 
-// ===============================
+
 // PIN追加
-// ===============================
+
 async function addByPin(pin) {
     try {
         const { data: profile } = await client
@@ -928,9 +922,9 @@ async function addByPin(pin) {
 }
 
 
-// ===============================
+
 // グループ作成
-// ===============================
+
 async function createGroup() {
     const { value } = await Swal.fire({
         title: "グループ名",
@@ -964,9 +958,9 @@ async function createGroup() {
     loadChats();
 }
 
-// ===============================
+
 // QR関連
-// ===============================
+
 
 async function handleQR(decoded) {
     try {
@@ -1078,9 +1072,9 @@ async function joinRoom(roomId) {
     loadChats();
 }
 
-// ===============================
+
 // 設定
-// ===============================
+
 function openSettings() {
     Swal.fire({
         width: "650px",
@@ -1571,9 +1565,9 @@ async function checkInvite() {
 
 async function deleteRoom(roomId) {
     try {
-        // ===============================
+
         // 1. ルーム情報取得
-        // ===============================
+
         const { data: room } = await client
             .from("rooms")
             .select("*")
@@ -1585,9 +1579,9 @@ async function deleteRoom(roomId) {
             return;
         }
 
-        // ===============================
+
         // 2. メンバー取得（通知用）
-        // ===============================
+
         const { data: members } = await client
             .from("room_members")
             .select("user_id")
@@ -1595,9 +1589,9 @@ async function deleteRoom(roomId) {
 
         const userIds = (members || []).map(m => m.user_id);
 
-        // ===============================
+
         // 3. RPCでDB一括削除
-        // ===============================
+
         const { error } = await client.rpc("delete_room", {
             p_room_id: roomId,
             p_user_id: user.id
@@ -1605,14 +1599,14 @@ async function deleteRoom(roomId) {
 
         if (error) throw error;
 
-        // ===============================
+
         // 4. ストレージ削除
-        // ===============================
+
         await deleteRoomFiles(roomId);
 
-        // ===============================
+
         // 5. 通知送信
-        // ===============================
+
         await notifyRoomDeletion(room, userIds);
 
         swalSuccess("ルームを削除しました");
@@ -1685,197 +1679,335 @@ function confirmDeleteRoom(roomId) {
     });
 }
 
-// ===============================
-// ファイル表示
-// ===============================
-function renderImageGallery(urls) {
-    let index = 0;
+const fileTypes = {
+    image: [
+        "png", "jpg", "jpeg", "jpe", "jfif",
+        "gif", "webp", "bmp", "dib",
+        "svg", "svgz",
+        "avif", "heic", "heif",
+        "ico", "cur",
+        "tif", "tiff",
+        "psd", "psb",
+        "raw", "dng",
+        "cr2", "cr3", "nef", "nrw",
+        "arw", "sr2", "orf", "rw2",
+        "raf", "pef", "x3f", "erf",
+        "srw", "kdc", "mrw"
+    ],
 
-    Swal.fire({
-        width: "90%",
-        html: `
-            <div style="text-align:center">
-                <img id="galleryImg" src="${urls[0]}" style="max-width:100%;border-radius:10px">
+    video: [
+        "mp4", "m4v", "webm", "mov",
+        "mkv", "avi", "flv", "f4v",
+        "ts", "mts", "m2ts",
+        "3gp", "3g2",
+        "wmv", "asf",
+        "ogv", "mpeg", "mpg",
+        "vob", "rm", "rmvb",
+        "divx", "xvid"
+    ],
 
-                <div style="margin-top:10px">
-                    <button id="prev">◀</button>
-                    <span id="counter">1/${urls.length}</span>
-                    <button id="next">▶</button>
-                </div>
-            </div>
-        `,
-        showConfirmButton: false,
-        didOpen: () => {
-            const img = document.getElementById("galleryImg");
-            const counter = document.getElementById("counter");
+    audio: [
+        "mp3", "wav", "ogg", "oga",
+        "aac", "m4a", "flac",
+        "opus", "weba",
+        "wma", "aiff", "aif",
+        "mid", "midi",
+        "amr", "ape", "alac",
+        "ra", "ram",
+        "au", "caf",
+        "ac3", "dts"
+    ],
 
-            document.getElementById("prev").onclick = () => {
-                index = (index - 1 + urls.length) % urls.length;
-                img.src = urls[index];
-                counter.innerText = `${index + 1}/${urls.length}`;
-            };
+    pdf: ["pdf"],
 
-            document.getElementById("next").onclick = () => {
-                index = (index + 1) % urls.length;
-                img.src = urls[index];
-                counter.innerText = `${index + 1}/${urls.length}`;
-            };
-        }
-    });
+    text: [
+        "txt", "log", "csv", "tsv", "rtf",
+        "ini", "cfg", "conf",
+        "env", "properties",
+        "gitignore", "gitattributes",
+        "editorconfig",
+        "license", "readme"
+    ],
+
+    code: [
+        "js", "mjs", "cjs",
+        "ts", "jsx", "tsx",
+        "html", "htm",
+        "css", "scss", "sass", "less",
+        "json", "jsonc",
+        "xml", "yaml", "yml",
+        "toml",
+        "md", "markdown",
+        "py", "java",
+        "c", "h",
+        "cpp", "cc", "cxx", "hpp",
+        "cs",
+        "php",
+        "go",
+        "rb",
+        "swift",
+        "kt", "kts",
+        "rs",
+        "dart",
+        "lua",
+        "pl",
+        "r",
+        "scala",
+        "groovy",
+        "vb",
+        "sh", "bash", "zsh", "fish",
+        "ps1",
+        "sql",
+        "vue", "svelte",
+        "dockerfile",
+        "makefile",
+        "cmake"
+    ],
+
+    archive: [
+        "zip", "rar", "7z",
+        "tar", "tgz", "gz",
+        "bz2", "xz", "lz",
+        "lzma", "zst",
+        "cab", "iso", "img",
+        "jar", "war", "ear",
+        "apk", "aab"
+    ],
+
+    office: [
+        "doc", "docx", "docm",
+        "xls", "xlsx", "xlsm", "xlsb",
+        "ppt", "pptx", "pptm",
+        "odt", "ods", "odp",
+        "numbers", "pages", "key"
+    ],
+
+    executable: [
+        "exe", "msi",
+        "dmg", "pkg",
+        "bat", "cmd",
+        "com", "scr",
+        "bin", "run",
+        "appimage",
+        "deb", "rpm"
+    ],
+
+    font: [
+        "ttf", "otf", "woff", "woff2",
+        "eot", "fon"
+    ],
+
+    ebook: [
+        "epub", "mobi", "azw", "azw3", "fb2"
+    ],
+
+    subtitle: [
+        "srt", "vtt", "ass", "ssa", "sub"
+    ],
+
+    data: [
+        "sqlite", "sqlite3", "db",
+        "mdb", "accdb",
+        "parquet", "feather"
+    ],
+
+    vector: [
+        "ai", "eps", "cdr"
+    ],
+
+    three: [
+        "obj", "fbx", "stl",
+        "dae", "gltf", "glb",
+        "3ds", "blend"
+    ]
+};
+
+const noExtMap = {
+    "dockerfile": "dockerfile",
+    "makefile": "makefile",
+    "readme": "readme",
+    "license": "license",
+    ".gitignore": "gitignore",
+    ".gitattributes": "gitattributes",
+    ".editorconfig": "editorconfig"
+};
+
+function getExt(url = "") {
+    const clean = decodeURIComponent(
+        url.split("?")[0].split("#")[0]
+    );
+
+    const name = clean.split("/").pop().toLowerCase();
+
+    if (noExtMap[name]) return noExtMap[name];
+
+    const idx = name.lastIndexOf(".");
+    return idx >= 0 ? name.slice(idx + 1) : "";
 }
 
-function renderPDF(url) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js";
-    Swal.fire({
-        width: "90%",
-        html: `
-            <canvas id="pdfCanvas"></canvas>
-            <div>
-                <button id="prevPage">←</button>
-                <span id="pageNum"></span>
-                <button id="nextPage">→</button>
-            </div>
-        `,
-        showConfirmButton: false,
-        didOpen: async () => {
-            const pdf = await pdfjsLib.getDocument(url).promise;
-            let page = 1;
-
-            const canvas = document.getElementById("pdfCanvas");
-            const ctx = canvas.getContext("2d");
-
-            async function render(p) {
-                const pageObj = await pdf.getPage(p);
-                const viewport = pageObj.getViewport({ scale: 1.2 });
-
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-
-                await pageObj.render({ canvasContext: ctx, viewport }).promise;
-
-                document.getElementById("pageNum").innerText =
-                    `${p} / ${pdf.numPages}`;
-            }
-
-            document.getElementById("prevPage").onclick = () => {
-                if (page > 1) render(--page);
-            };
-
-            document.getElementById("nextPage").onclick = () => {
-                if (page < pdf.numPages) render(++page);
-            };
-
-            render(page);
-        }
-    });
+function findFileType(ext) {
+    for (const [type, list] of Object.entries(fileTypes)) {
+        if (list.includes(ext)) return type;
+    }
+    return "unknown";
 }
 
-function renderCode(url) {
-    fetch(url)
-        .then(r => r.text())
-        .then(text => {
-
-            Swal.fire({
-                width: "80%",
-                html: `
-                    <pre><code id="codeBlock"></code></pre>
-                `,
-                showConfirmButton: false,
-                didOpen: () => {
-                    const el = document.getElementById("codeBlock");
-                    el.textContent = text;
-
-                    hljs.highlightElement(el);
-                }
-            });
-        });
-}
-
-
-
-
-async function renderZip(url) {
+async function fetchText(url) {
     const res = await fetch(url);
-    const blob = await res.blob();
 
-    const zip = await JSZip.loadAsync(blob);
+    if (!res.ok) {
+        throw new Error(`読み込み失敗 (${res.status})`);
+    }
 
-    let html = "<ul>";
+    return await res.text();
+}
 
-    zip.forEach((path) => {
-        html += `<li>${path}</li>`;
-    });
-
-    html += "</ul>";
+async function renderTextFile(url, title = "テキスト") {
+    const text = await fetchText(url);
 
     Swal.fire({
-        width: "70%",
-        html,
+        width: 950,
+        title,
+        html: `
+            <pre style="
+                text-align:left;
+                max-height:70vh;
+                overflow:auto;
+                white-space:pre-wrap;
+                word-break:break-word;
+                background:#111;
+                color:#eee;
+                padding:16px;
+                border-radius:10px;
+            ">${escapeHTML(text)}</pre>
+        `,
         showConfirmButton: false
     });
 }
 
-
-function renderDocx(url) {
-    fetch(url)
-        .then(r => r.arrayBuffer())
-        .then(buffer => mammoth.convertToHtml({ arrayBuffer: buffer }))
-        .then(result => {
-            Swal.fire({
-                html: `<div style="text-align:left">${result.value}</div>`,
-                width: "80%"
-            });
-        });
+function renderImage(url) {
+    Swal.fire({
+        width: 900,
+        html: `
+            <img
+                src="${escapeHTML(url)}"
+                style="max-width:100%;max-height:80vh;border-radius:8px">
+        `,
+        showConfirmButton: false
+    });
 }
 
-const fileTypes = {
-    image: [
-        "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "heic"
-    ],
-    video: [
-        "mp4", "webm", "mov", "mkv", "avi", "flv", "m4v", "ts"
-    ],
-    audio: [
-        "mp3", "wav", "ogg", "aac", "m4a", "flac", "opus"
-    ],
-    pdf: ["pdf"],
-    code: [
-        "js", "ts", "jsx", "tsx", "html", "css", "json",
-        "py", "java", "c", "cpp", "cs", "php", "go", "rb",
-        "swift", "kt", "rs", "sh", "bash", "sql", "yaml", "yml", "xml", "md"
-    ],
-    archive: [
-        "zip", "rar", "7z", "tar", "gz", "bz2"
-    ],
-    office: [
-        "docx", "xlsx", "pptx", "doc", "xls", "ppt"
-    ],
-    executable: [
-        "exe", "msi", "apk", "dmg", "pkg", "bat", "cmd", "sh", "appimage"
-    ]
-};
+function renderVideo(url) {
+    Swal.fire({
+        width: 900,
+        html: `
+            <video controls autoplay style="max-width:100%;max-height:80vh">
+                <source src="${escapeHTML(url)}">
+            </video>
+        `,
+        showConfirmButton: false
+    });
+}
 
-function loadFile(url) {
-    const ext = url.split("?")[0].split(".").pop().toLowerCase();
+function renderAudio(url) {
+    Swal.fire({
+        width: 650,
+        html: `
+            <audio controls autoplay style="width:100%">
+                <source src="${escapeHTML(url)}">
+            </audio>
+        `,
+        showConfirmButton: false
+    });
+}
 
-    if (fileTypes.image.includes(ext)) return renderImage(url);
-    if (fileTypes.video.includes(ext)) return renderVideo(url);
-    if (fileTypes.audio.includes(ext)) return renderAudio(url);
-    if (fileTypes.pdf.includes(ext)) return renderPDF(url);
-    if (fileTypes.code.includes(ext)) return renderCode(url);
-    if (fileTypes.archive.includes(ext)) return renderZip(url);
-    if (fileTypes.office.includes(ext)) {
-        if (ext === "docx") return renderDocx(url);
-        if (ext === "xlsx") return renderXLSX(url);
+function renderPdf(url) {
+    Swal.fire({
+        width: "90%",
+        html: `
+            <iframe
+                src="${escapeHTML(url)}"
+                style="width:100%;height:80vh;border:none">
+            </iframe>
+        `,
+        showConfirmButton: false
+    });
+}
+
+function renderDownload(url, title = "ファイル") {
+    Swal.fire({
+        title,
+        html: `
+            <a
+                href="${escapeHTML(url)}"
+                target="_blank"
+                class="btn btn-primary">
+                開く / ダウンロード
+            </a>
+        `,
+        showConfirmButton: false
+    });
+}
+
+async function loadFile(url) {
+    try {
+        const ext = getExt(url);
+        const type = findFileType(ext);
+
+        const handlers = {
+            image: () => renderImage(url),
+            video: () => renderVideo(url),
+            audio: () => renderAudio(url),
+            pdf: () => renderPdf(url),
+
+            text: async () => {
+                if (ext === "csv") return renderCSV(url);
+                return renderTextFile(url);
+            },
+
+            code: async () => {
+                return renderTextFile(url, "コード");
+            },
+
+            office: async () => {
+                if (["xlsx", "xls", "xlsm", "xlsb"].includes(ext)) {
+                    return renderXlsx(url);
+                }
+
+                if (["docx"].includes(ext)) {
+                    return renderDocx(url);
+                }
+
+                return renderDownload(url, "Officeファイル");
+            },
+
+            archive: async () => {
+                if (ext === "zip") {
+                    return renderZip(url);
+                }
+
+                return renderDownload(url, "圧縮ファイル");
+            },
+
+            executable: () => renderDownload(url, "実行ファイル"),
+            font: () => renderDownload(url, "フォント"),
+            ebook: () => renderDownload(url, "電子書籍"),
+            subtitle: () => renderTextFile(url, "字幕"),
+            data: () => renderDownload(url, "データ"),
+            vector: () => renderDownload(url, "ベクター"),
+            three: () => renderDownload(url, "3Dモデル"),
+            unknown: () => window.open(url, "_blank")
+        };
+
+        await handlers[type]();
+
+    } catch (e) {
+        console.error(e);
+
+        Swal.fire(
+            "エラー",
+            e.message || "ファイルを開けませんでした",
+            "error"
+        );
     }
-
-    if (fileTypes.executable.includes(ext)) {
-        return Swal.fire({
-            icon: "warning",
-            title: "実行ファイル",
-            text: "ダウンロードのみ可能です"
-        }).then(() => window.open(url));
-    }
-
-    window.open(url);
 }
