@@ -577,7 +577,6 @@ async function loadMessages() {
 
     for (const m of messages || []) {
         const isMe = m.sender_id === user.id;
-
         const avatar = getMessageAvatar(m, profiles);
 
         const style = localStorage.getItem("bubbleStyle") || "tail";
@@ -588,13 +587,35 @@ async function loadMessages() {
             bubbleClass = bubbleClass.replace("tail", "");
         }
 
+        let body = "";
+
+        if (m.content && m.content.trim()) {
+            body += `
+                <div class="text">
+                    ${escapeHTML(m.content)}
+                </div>
+            `;
+        }
+
+        if (m.file_url) {
+            body += `
+                <div class="mt-1">
+                    <button
+                        class="btn btn-sm btn-outline-secondary"
+                        onclick="loadFile('${escapeHTML(m.file_url)}')">
+                        添付ファイルを開く
+                    </button>
+                </div>
+            `;
+        }
+
         html += `
             <div class="msg-row ${isMe ? "me" : "you"}">
 
                 ${!isMe ? `<div class="avatar-inline">${avatar}</div>` : ""}
 
                 <div class="${bubbleClass}">
-                    <div class="text">${escapeHTML(m.content || "")}</div>
+                    ${body}
                     <div class="meta">${formatDate(m.created_at)}</div>
                 </div>
 
@@ -604,7 +625,9 @@ async function loadMessages() {
         lastUser = m.sender_id;
     }
 
-    document.getElementById("messages").innerHTML = html;
+    const box = document.getElementById("messages");
+    box.innerHTML = html;
+    box.scrollTop = box.scrollHeight;
 }
 
 
@@ -621,16 +644,18 @@ async function markAsReadBatch() {
 
 
 // 送信
-
 async function sendMsg() {
-    if (sending) return;
+    if (sending || !currentRoom) return;
 
     const input = document.getElementById("msgInput");
     const fileInput = document.getElementById("fileInput");
 
-    const file = fileInput?.files?.[0];
+    const rawText = input?.value ?? "";
+    const text = rawText.trim();
+    const file = fileInput?.files?.[0] ?? null;
 
-    if (!input.value && !file) return;
+    // 空白だけ + 添付なし は送らない
+    if (!text && !file) return;
 
     sending = true;
 
@@ -643,11 +668,11 @@ async function sendMsg() {
         if (file) {
             const path = `${crypto.randomUUID()}_${file.name}`;
 
-            const { error } = await client.storage
+            const { error: uploadError } = await client.storage
                 .from("files")
                 .upload(path, file);
 
-            if (error) throw error;
+            if (uploadError) throw uploadError;
 
             const { data } = client.storage
                 .from("files")
@@ -656,13 +681,21 @@ async function sendMsg() {
             fileUrl = data.publicUrl;
         }
 
-        const { error } = await client.from("messages").insert({
+        const payload = {
             room_id: currentRoom,
             sender_id: user.id,
-            content: input.value,
             file_url: fileUrl,
             read_by: [user.id]
-        });
+        };
+
+        // テキストがある時だけ content を入れる
+        if (text) {
+            payload.content = text;
+        }
+
+        const { error } = await client
+            .from("messages")
+            .insert(payload);
 
         if (error) throw error;
 
@@ -670,7 +703,7 @@ async function sendMsg() {
         if (fileInput) fileInput.value = "";
 
     } catch (e) {
-        swalError(e.message);
+        swalError(e.message || "送信失敗");
     } finally {
         sending = false;
         if (btn) btn.disabled = false;
@@ -1692,7 +1725,13 @@ const fileTypes = {
         "cr2", "cr3", "nef", "nrw",
         "arw", "sr2", "orf", "rw2",
         "raf", "pef", "x3f", "erf",
-        "srw", "kdc", "mrw"
+        "srw", "kdc", "mrw",
+        "apng", "jxr", "wdp",
+        "fits", "dicom", "pcx", "tga",
+        "hdr", "exr", "pam", "pbm", "pgm", "ppm",
+        "sgi", "sun", "ras",
+        "icns", "qoi",
+        "nuv", "ani"
     ],
 
     video: [
@@ -1701,9 +1740,14 @@ const fileTypes = {
         "ts", "mts", "m2ts",
         "3gp", "3g2",
         "wmv", "asf",
-        "ogv", "mpeg", "mpg",
-        "vob", "rm", "rmvb",
-        "divx", "xvid"
+        "ogv", "ogg",
+        "mpeg", "mpg", "mpe",
+        "vob", "dat",
+        "rm", "rmvb",
+        "divx", "xvid",
+        "mxf", "dv",
+        "m2v", "f4p", "f4a", "ivf",
+        "yuv", "avs", "bik", "smk"
     ],
 
     audio: [
@@ -1714,35 +1758,42 @@ const fileTypes = {
         "mid", "midi",
         "amr", "ape", "alac",
         "ra", "ram",
-        "au", "caf",
-        "ac3", "dts"
+        "au", "snd",
+        "caf", "ac3", "dts",
+        "mka", "dsf", "dff", "voc",
+        "xm", "mod", "it", "s3m", "spx"
     ],
 
     pdf: ["pdf"],
 
     text: [
         "txt", "log", "csv", "tsv", "rtf",
-        "ini", "cfg", "conf",
+        "ini", "cfg", "conf", "config",
         "env", "properties",
         "gitignore", "gitattributes",
         "editorconfig",
-        "license", "readme"
+        "license", "readme",
+        "adoc", "asciidoc",
+        "rst", "todo", "nfo",
+        "man", "nml", "lst", "asc"
     ],
 
     code: [
         "js", "mjs", "cjs",
-        "ts", "jsx", "tsx",
-        "html", "htm",
+        "ts", "tsx", "jsx",
+        "html", "htm", "xhtml",
         "css", "scss", "sass", "less",
         "json", "jsonc",
-        "xml", "yaml", "yml",
+        "xml", "xsd", "xsl",
+        "yaml", "yml",
         "toml",
-        "md", "markdown",
-        "py", "java",
+        "md", "markdown", "mdx",
+        "py", "pyw", "ipynb",
+        "java",
         "c", "h",
-        "cpp", "cc", "cxx", "hpp",
+        "cpp", "cc", "cxx", "hpp", "hh", "hxx",
         "cs",
-        "php",
+        "php", "phtml",
         "go",
         "rb",
         "swift",
@@ -1750,18 +1801,51 @@ const fileTypes = {
         "rs",
         "dart",
         "lua",
-        "pl",
+        "pl", "pm",
         "r",
         "scala",
         "groovy",
-        "vb",
+        "vb", "vbs",
+        "m",
         "sh", "bash", "zsh", "fish",
-        "ps1",
+        "ps1", "psm1",
         "sql",
-        "vue", "svelte",
+        "vue",
+        "svelte",
         "dockerfile",
         "makefile",
-        "cmake"
+        "gradle",
+        "cmake",
+        "asm", "s",
+        "proto",
+        "graphql", "gql",
+        "lark", "pegjs",
+        "hcl", "tf", "tfvars",
+        "jinja", "j2",
+        "rake",
+        "nim", "zig",
+        "hx",
+        "ml", "mli",
+        "erl", "beam",
+        "clj", "cljs", "cljc",
+        "ex", "exs",
+        "rkt",
+        "bzl",
+        "st",
+        "prg",
+        "bas",
+        "for", "f90",
+        "ada", "adb", "ads",
+        "m4",
+        "tcl",
+        "clp",
+        "lisp",
+        "scm",
+        "sml",
+        "ebnf", "bnf",
+        "re", "rl",
+        "pyxapp", "pyxres",
+        "mikan"
     ],
 
     archive: [
@@ -1771,15 +1855,24 @@ const fileTypes = {
         "lzma", "zst",
         "cab", "iso", "img",
         "jar", "war", "ear",
-        "apk", "aab"
+        "apk", "aab",
+        "ar", "cpio",
+        "pak", "pak2", "vpk",
+        "wad", "hog", "grp",
+        "lzh", "arj", "sit"
     ],
 
     office: [
         "doc", "docx", "docm",
+        "dot", "dotx",
         "xls", "xlsx", "xlsm", "xlsb",
+        "xlt", "xltx", "xlam",
         "ppt", "pptx", "pptm",
-        "odt", "ods", "odp",
-        "numbers", "pages", "key"
+        "pps", "ppsx", "pot", "potx",
+        "odt", "ods", "odp", "odg",
+        "numbers", "pages", "key",
+        "xmind", "mm", "abw",
+        "sxw", "sxc", "sxi"
     ],
 
     executable: [
@@ -1789,36 +1882,56 @@ const fileTypes = {
         "com", "scr",
         "bin", "run",
         "appimage",
-        "deb", "rpm"
+        "deb", "rpm",
+        "elf", "so", "dylib", "a",
+        "prc", "pdb",
+        "xbe", "dol", "nds"
     ],
 
     font: [
         "ttf", "otf", "woff", "woff2",
-        "eot", "fon"
+        "eot", "fon", "dfont",
+        "pfa", "pfb", "bdf", "pcf"
     ],
 
     ebook: [
-        "epub", "mobi", "azw", "azw3", "fb2"
+        "epub", "mobi", "azw",
+        "azw3", "fb2", "ibooks",
+        "cbz", "cbr",
+        "djvu", "lit", "tcr", "pdb"
     ],
 
     subtitle: [
-        "srt", "vtt", "ass", "ssa", "sub"
+        "srt", "vtt", "ass", "ssa",
+        "sub", "idx", "smi"
     ],
 
     data: [
         "sqlite", "sqlite3", "db",
-        "mdb", "accdb",
-        "parquet", "feather"
+        "db3", "mdb", "accdb",
+        "parquet", "feather",
+        "pkl", "h5", "hdf5",
+        "arrow", "sav", "dta",
+        "sas7bdat", "npz", "mat",
+        "nc", "grib", "mrc", "root", "fits"
     ],
 
     vector: [
-        "ai", "eps", "cdr"
+        "ai", "eps", "cdr",
+        "emf", "wmf",
+        "sketch", "fig", "drawio",
+        "sk1", "wmz"
     ],
 
     three: [
         "obj", "fbx", "stl",
         "dae", "gltf", "glb",
-        "3ds", "blend"
+        "3ds", "blend",
+        "ply", "x3d", "usd", "usdz",
+        "usda", "usdc",
+        "vox", "abc",
+        "bvh", "smd", "vta",
+        "ma", "mb"
     ]
 };
 
@@ -1829,8 +1942,23 @@ const noExtMap = {
     "license": "license",
     ".gitignore": "gitignore",
     ".gitattributes": "gitattributes",
-    ".editorconfig": "editorconfig"
+    ".editorconfig": "editorconfig",
+    "changelog": "changelog",
+    "todo": "todo",
+    "authors": "authors",
+    "contributors": "contributors"
 };
+
+
+const mimeCache = new Map();
+
+function escapeHTML(str = "") {
+    return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+}
 
 function getExt(url = "") {
     const clean = decodeURIComponent(
@@ -1852,6 +1980,71 @@ function findFileType(ext) {
     return "unknown";
 }
 
+async function getMimeType(url) {
+    if (mimeCache.has(url)) {
+        return mimeCache.get(url);
+    }
+
+    let mime = "";
+
+    try {
+        const res = await fetch(url, { method: "HEAD" });
+        mime = res.headers.get("content-type") || "";
+    } catch {
+        try {
+            const res = await fetch(url);
+            mime = res.headers.get("content-type") || "";
+        } catch {
+            mime = "";
+        }
+    }
+
+    mimeCache.set(url, mime);
+    return mime;
+}
+
+function getTypeFromMime(mime = "") {
+    mime = mime.toLowerCase();
+
+    if (mime.startsWith("image/")) return "image";
+    if (mime.startsWith("video/")) return "video";
+    if (mime.startsWith("audio/")) return "audio";
+
+    if (mime.includes("pdf")) return "pdf";
+
+    if (
+        mime.includes("text") ||
+        mime.includes("json") ||
+        mime.includes("xml")
+    ) {
+        return "text";
+    }
+
+    if (
+        mime.includes("javascript") ||
+        mime.includes("html") ||
+        mime.includes("css")
+    ) {
+        return "code";
+    }
+
+    if (
+        mime.includes("zip") ||
+        mime.includes("compressed")
+    ) {
+        return "archive";
+    }
+
+    if (
+        mime.includes("msword") ||
+        mime.includes("officedocument")
+    ) {
+        return "office";
+    }
+
+    return "unknown";
+}
+
 async function fetchText(url) {
     const res = await fetch(url);
 
@@ -1860,29 +2053,6 @@ async function fetchText(url) {
     }
 
     return await res.text();
-}
-
-async function renderTextFile(url, title = "テキスト") {
-    const text = await fetchText(url);
-
-    Swal.fire({
-        width: 950,
-        title,
-        html: `
-            <pre style="
-                text-align:left;
-                max-height:70vh;
-                overflow:auto;
-                white-space:pre-wrap;
-                word-break:break-word;
-                background:#111;
-                color:#eee;
-                padding:16px;
-                border-radius:10px;
-            ">${escapeHTML(text)}</pre>
-        `,
-        showConfirmButton: false
-    });
 }
 
 function renderImage(url) {
@@ -1901,7 +2071,10 @@ function renderVideo(url) {
     Swal.fire({
         width: 900,
         html: `
-            <video controls autoplay style="max-width:100%;max-height:80vh">
+            <video
+                controls
+                autoplay
+                style="max-width:100%;max-height:80vh">
                 <source src="${escapeHTML(url)}">
             </video>
         `,
@@ -1934,6 +2107,166 @@ function renderPdf(url) {
     });
 }
 
+async function renderTextFile(url, title = "テキスト") {
+    const text = await fetchText(url);
+
+    Swal.fire({
+        width: 950,
+        title,
+        html: `
+            <pre style="
+                text-align:left;
+                max-height:70vh;
+                overflow:auto;
+                white-space:pre-wrap;
+                word-break:break-word;
+                background:#111;
+                color:#eee;
+                padding:16px;
+                border-radius:10px;
+            ">${escapeHTML(text)}</pre>
+        `,
+        showConfirmButton: false
+    });
+}
+
+async function renderCode(url) {
+    const text = await fetchText(url);
+
+    Swal.fire({
+        width: 950,
+        html: `
+            <pre style="
+                max-height:75vh;
+                overflow:auto;
+                text-align:left;
+            "><code id="codeBlock">${escapeHTML(text)}</code></pre>
+        `,
+        showConfirmButton: false,
+        didOpen: () => {
+            const el = document.getElementById("codeBlock");
+            if (window.hljs) {
+                hljs.highlightElement(el);
+            }
+        }
+    });
+}
+
+async function renderCSV(url) {
+    const text = await fetchText(url);
+
+    const rows = text
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .slice(0, 100)
+        .map(row => row.split(","));
+
+    const html = `
+        <div style="max-height:70vh;overflow:auto">
+            <table class="table table-sm table-bordered">
+                ${rows.map(row => `
+                    <tr>
+                        ${row.map(v => `
+                            <td>${escapeHTML(v)}</td>
+                        `).join("")}
+                    </tr>
+                `).join("")}
+            </table>
+        </div>
+    `;
+
+    Swal.fire({
+        width: 950,
+        title: "CSV",
+        html,
+        showConfirmButton: false
+    });
+}
+
+async function renderXlsx(url) {
+    const res = await fetch(url);
+    const buf = await res.arrayBuffer();
+
+    const wb = XLSX.read(buf, {
+        type: "array"
+    });
+
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+
+    const rows = XLSX.utils
+        .sheet_to_json(sheet, { header: 1 })
+        .slice(0, 100);
+
+    const html = `
+        <div style="max-height:70vh;overflow:auto">
+            <table class="table table-sm table-bordered">
+                ${rows.map(row => `
+                    <tr>
+                        ${row.map(v => `
+                            <td>${escapeHTML(String(v ?? ""))}</td>
+                        `).join("")}
+                    </tr>
+                `).join("")}
+            </table>
+        </div>
+    `;
+
+    Swal.fire({
+        width: 950,
+        title: "Excel",
+        html,
+        showConfirmButton: false
+    });
+}
+
+async function renderDocx(url) {
+    const res = await fetch(url);
+    const buf = await res.arrayBuffer();
+
+    const result = await mammoth.convertToHtml({
+        arrayBuffer: buf
+    });
+
+    Swal.fire({
+        width: 950,
+        html: `
+            <div style="text-align:left;max-height:70vh;overflow:auto">
+                ${result.value}
+            </div>
+        `,
+        showConfirmButton: false
+    });
+}
+
+async function renderZip(url) {
+    const res = await fetch(url);
+    const blob = await res.blob();
+
+    const zip = await JSZip.loadAsync(blob);
+
+    const files = [];
+
+    zip.forEach((path, file) => {
+        if (!file.dir) {
+            files.push(path);
+        }
+    });
+
+    Swal.fire({
+        width: 700,
+        html: `
+            <div style="text-align:left">
+                ${files.map(f => `
+                    <div style="padding:6px 0">
+                        ${escapeHTML(f)}
+                    </div>
+                `).join("")}
+            </div>
+        `,
+        showConfirmButton: false
+    });
+}
+
 function renderDownload(url, title = "ファイル") {
     Swal.fire({
         title,
@@ -1952,21 +2285,33 @@ function renderDownload(url, title = "ファイル") {
 async function loadFile(url) {
     try {
         const ext = getExt(url);
-        const type = findFileType(ext);
+
+        let type = findFileType(ext);
+
+        if (type === "unknown") {
+            const mime = await getMimeType(url);
+            type = getTypeFromMime(mime);
+        }
 
         const handlers = {
             image: () => renderImage(url),
+
             video: () => renderVideo(url),
+
             audio: () => renderAudio(url),
+
             pdf: () => renderPdf(url),
 
             text: async () => {
-                if (ext === "csv") return renderCSV(url);
+                if (ext === "csv") {
+                    return renderCSV(url);
+                }
+
                 return renderTextFile(url);
             },
 
             code: async () => {
-                return renderTextFile(url, "コード");
+                return renderCode(url);
             },
 
             office: async () => {
@@ -1974,7 +2319,7 @@ async function loadFile(url) {
                     return renderXlsx(url);
                 }
 
-                if (["docx"].includes(ext)) {
+                if (ext === "docx") {
                     return renderDocx(url);
                 }
 
@@ -1989,17 +2334,40 @@ async function loadFile(url) {
                 return renderDownload(url, "圧縮ファイル");
             },
 
-            executable: () => renderDownload(url, "実行ファイル"),
-            font: () => renderDownload(url, "フォント"),
-            ebook: () => renderDownload(url, "電子書籍"),
-            subtitle: () => renderTextFile(url, "字幕"),
-            data: () => renderDownload(url, "データ"),
-            vector: () => renderDownload(url, "ベクター"),
-            three: () => renderDownload(url, "3Dモデル"),
-            unknown: () => window.open(url, "_blank")
+            executable: () => {
+                return renderDownload(url, "実行ファイル");
+            },
+
+            font: () => {
+                return renderDownload(url, "フォント");
+            },
+
+            ebook: () => {
+                return renderDownload(url, "電子書籍");
+            },
+
+            subtitle: async () => {
+                return renderTextFile(url, "字幕");
+            },
+
+            data: () => {
+                return renderDownload(url, "データ");
+            },
+
+            vector: () => {
+                return renderDownload(url, "ベクター");
+            },
+
+            three: () => {
+                return renderDownload(url, "3Dモデル");
+            },
+
+            unknown: () => {
+                window.open(url, "_blank");
+            }
         };
 
-        await handlers[type]();
+        await (handlers[type] || handlers.unknown)();
 
     } catch (e) {
         console.error(e);
