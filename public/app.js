@@ -710,6 +710,24 @@ async function sendMsg() {
     }
 }
 
+function calcAge(birthday) {
+    if (!birthday) return null;
+
+    const birth = new Date(birthday);
+    if (isNaN(birth.getTime())) return null;
+
+    const today = new Date();
+
+    let age = today.getFullYear() - birth.getFullYear();
+
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        age--;
+    }
+
+    return age;
+}
+
 
 // リアルタイム
 
@@ -1502,6 +1520,21 @@ function applySettings() {
 
     if (s.accent) {
         document.documentElement.style.setProperty("--accent", s.accent);
+        const hex = s.accent.replace("#", "");
+
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+
+        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+
+        const textColor = luminance > 140 ? "#000" : "#fff";
+        const metaColor = luminance > 140
+            ? "rgba(0,0,0,0.55)"
+            : "rgba(255,255,255,0.65)";
+
+        document.documentElement.style.setProperty("--msg-text", textColor);
+        document.documentElement.style.setProperty("--msg-meta", metaColor);
     }
 
     if (s.bg) {

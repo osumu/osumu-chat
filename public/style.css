@@ -49,6 +49,14 @@ body {
     justify-content: flex-start;
 }
 
+.msg-row .text {
+    color: var(--msg-text);
+}
+
+.msg-row .meta {
+    color: var(--msg-meta);
+}
+
 .bubble {
     max-width: 70%;
     padding: 10px 12px;
@@ -75,26 +83,27 @@ body {
     border-radius: 999px;
 }
 
-.bubble.tail {
-    position: relative;
-}
+.bubble.tail {}
 
-.bubble.me.tail::after {
-    content: "";
-    position: absolute;
-    right: -8px;
-    top: 10px;
-    border: 8px solid transparent;
-    border-left-color: var(--accent);
-}
-
+.bubble.me.tail::after,
 .bubble.you.tail::after {
     content: "";
     position: absolute;
-    left: -8px;
     top: 10px;
+    width: 0;
+    height: 0;
+}
+
+.bubble.you.tail::after {
+    left: -8px;
     border: 8px solid transparent;
     border-right-color: #fff;
+}
+
+.bubble.me.tail::after {
+    right: -8px;
+    border: 8px solid transparent;
+    border-left-color: var(--accent);
 }
 
 .bubble .text {
