@@ -271,6 +271,10 @@ async function openProfile() {
                 </button>
             </div>
 
+            <button class="btn btn-outline-dark me-3" onclick="addQR()">
+                <i class="bi bi-qr-code"></i><span>QR表示</span>
+            </button>
+
             <!-- 基本情報 -->
             <label class="form-label"><i class="bi bi-person-circle"></i>ユーザー名</label>
             <input id="profileUsername" class="form-control mb-2"
@@ -498,9 +502,8 @@ async function loadChats() {
                     </div>
 
                     <div style="flex:1">
-                        <b>${escapeHTML(name)}</b><br>
                         <small>
-                            ${escapeHTML(last?.content || "メッセージなし")}
+                            ${escapeHTML(last?.content || (last?.file_url ? "ファイル" : "メッセージなし"))}
                         </small>
                     </div>
 
@@ -728,6 +731,14 @@ function calcAge(birthday) {
     return age;
 }
 
+function linkify(text = "") {
+    const escaped = escapeHTML(text);
+
+    return escaped.replace(
+        /(https?:\/\/[^\s<]+)/g,
+        url => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+    );
+}
 
 // リアルタイム
 
