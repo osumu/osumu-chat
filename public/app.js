@@ -223,6 +223,56 @@ async function ensureProfile() {
     });
 }
 
+function openIconPickerForProfile() {
+    Swal.fire({
+        width: 400,
+        showConfirmButton: false,
+        html: `
+            <div class="text-start">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="m-0">アバター選択</h3>
+                    <button class="btn btn-sm" onclick="Swal.close()">✕</button>
+                </div>
+
+                <button id="profileIconPickerBtn" class="btn btn-outline-primary w-100 mb-3">
+                    アイコンを選択
+                </button>
+
+                <div id="profileIconPreview" class="text-center"></div>
+            </div>
+        `,
+        didOpen: () => {
+            const options = {
+                iconLibraries: ["font-awesome.min.json"],
+                iconLibrariesCss: [
+                    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css"
+                ],
+
+                onSelect: (icon) => {
+                    window.profileAvatarValue = icon.iconHtml;
+
+                    const preview = document.getElementById("profileAvatar");
+                    if (preview) {
+                        preview.innerHTML = renderAvatar(icon.iconHtml);
+                    }
+
+                    const modalPreview = document.getElementById("profileIconPreview");
+                    if (modalPreview) {
+                        modalPreview.innerHTML = icon.iconHtml;
+                    }
+
+                    Swal.close();
+                }
+            };
+
+            window.profileIconPicker = new UniversalIconPicker(
+                "#profileIconPickerBtn",
+                options
+            );
+        }
+    });
+}
+
 async function openProfile() {
     const { data, error } = await client
         .from("profiles")
@@ -272,19 +322,19 @@ async function openProfile() {
             </div>
 
             <button class="btn btn-outline-dark me-3" onclick="addQR()">
-                <i class="bi bi-qr-code"></i><span>QR表示</span>
+                <span>QR表示</span>
             </button>
 
             <!-- 基本情報 -->
-            <label class="form-label"><i class="bi bi-person-circle"></i>ユーザー名</label>
+            <label class="form-label">ユーザー名</label>
             <input id="profileUsername" class="form-control mb-2"
                 value="${escapeHTML(data.username || "")}">
 
-            <label class="form-label"><i class="bi bi-file-person"></i>表示名</label>
+            <label class="form-label">表示名</label>
             <input id="profileName" class="form-control mb-2"
                 value="${escapeHTML(data.name || "")}">
 
-            <label class="form-label"><i class="bi bi-123"></i>PIN</label>
+            <label class="form-label">PIN</label>
             <input id="profilePin" class="form-control mb-3"
                 maxlength="6"
                 value="${escapeHTML(data.pin || "")}">
@@ -493,21 +543,30 @@ async function loadChats() {
                 avatarHTML = renderAvatar(profile?.avatar);
             }
 
+            let lastText = "メッセージなし";
+
+            if (last) {
+                if (typeof last.content === "string" && last.content.trim()) {
+                    lastText = last.content;
+                } else if (last.file_url) {
+                    lastText = "ファイル";
+                }
+            }
+
             html += `
-                <div class="chat-item"
-                    onclick="openRoom('${room.id}','${escapeHTML(name)}')">
+            <div class="chat-item"
+                onclick="openRoom('${room.id}','${escapeHTML(name)}')">
 
-                    <div class="avatar">
-                        ${avatarHTML}
-                    </div>
-
-                    <div style="flex:1">
-                        <small>
-                            ${escapeHTML(last?.content || (last?.file_url ? "ファイル" : "メッセージなし"))}
-                        </small>
-                    </div>
-
+                <div class="avatar">
+                    ${avatarHTML}
                 </div>
+
+                <div style="flex:1">
+                    <b>${escapeHTML(name)}</b><br>
+                    <small>${escapeHTML(lastText)}</small>
+                </div>
+
+            </div>
             `;
         }
 
@@ -521,31 +580,40 @@ async function loadChats() {
 
 
 // ルーム開く
-
 async function openRoom(id, name) {
     currentRoom = id;
 
-    document.getElementById("chatListPage").style.display =
-        "none";
+    const { data: room } = await client
+        .from("rooms")
+        .select("id, is_group")
+        .eq("id", id)
+        .maybeSingle();
 
-    document.getElementById("chatRoom").style.display =
-        "block";
+    window.currentRoomInfo = room || null;
 
+    const isGroup = !!room?.is_group;
+
+    document.getElementById("groupQrBtn").style.display = isGroup ? "" : "none";
+    document.getElementById("groupScanBtn").style.display = isGroup ? "" : "none";
+    document.getElementById("groupAddBtn").style.display = isGroup ? "" : "none";
+    document.getElementById("groupLeaveBtn").style.display = isGroup ? "" : "none";
+
+    document.getElementById("chatListPage").style.display = "none";
+    document.getElementById("chatRoom").style.display = "block";
     document.getElementById("chatUser").innerText = name;
 
     await client.from("room_members").upsert(
         {
             room_id: id,
-            user_id: user.id,
+            user_id: user.id
         },
         {
-            onConflict: "room_id,user_id",
+            onConflict: "room_id,user_id"
         }
     );
 
     await loadMessages();
 }
-
 
 // 戻る
 
@@ -669,7 +737,10 @@ async function sendMsg() {
         let fileUrl = null;
 
         if (file) {
-            const path = `${crypto.randomUUID()}_${file.name}`;
+            const safeName = file.name
+                .replace(/[^\w.\-]/g, "_");
+
+            const path = `${crypto.randomUUID()}_${safeName}`;
 
             const { error: uploadError } = await client.storage
                 .from("files")
@@ -811,8 +882,17 @@ function subscribeMessages() {
 
 
 // 追加
+async function openAdd() {
+    const { data: room } = currentRoom
+        ? await client
+            .from("rooms")
+            .select("is_group")
+            .eq("id", currentRoom)
+            .single()
+        : { data: null };
 
-function openAdd() {
+    const isGroup = !!room?.is_group;
+
     Swal.fire({
         width: 420,
         confirmButtonText: "追加",
@@ -829,20 +909,27 @@ function openAdd() {
             <input id="pinInput" class="form-control" placeholder="6桁のPIN">
             <div id="pinResult" class="mt-2 small"></div>
 
-            <div class="text-center my-3 text-muted">もしくは</div>
+            ${isGroup
+                ? `
+                    <div class="text-center my-3 text-muted">もしくは</div>
 
-            <button id="qrBtn" class="btn btn-outline-primary w-100">
-                QRコードで参加
-            </button>
-
+                    <button id="qrBtn" class="btn btn-outline-primary w-100">
+                        QRコードで参加
+                    </button>
+                    `
+                : ""
+            }
         </div>
         `,
         didOpen: () => {
             setupPinRealtimeCheck();
-            document.getElementById("qrBtn").onclick = () => {
-                Swal.close();
-                scanQR();
-            };
+
+            if (isGroup) {
+                document.getElementById("qrBtn").onclick = () => {
+                    Swal.close();
+                    scanQR();
+                };
+            }
         }
     }).then(async res => {
         if (!res.isConfirmed) return;
@@ -1606,6 +1693,9 @@ async function addMemberToGroup() {
     );
 
     swalSuccess("追加しました");
+    notifyMessage({
+        content: `${addedProfile.data?.name || "ユーザー"} をグループに追加しました`
+    });
 }
 
 async function leaveGroup() {

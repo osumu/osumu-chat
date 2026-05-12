@@ -54,7 +54,7 @@
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h1>チャット</h1>
                 <div>
-                    <button class="btn btn-outline-primary" onclick="openProfile()">
+                    <button class="btn btn-outline-primary me-3" onclick="openProfile()">
                         <i class="bi bi-person-gear"></i>
                     </button>
                     <button class="btn btn-outline-success me-3" onclick="createGroup()">
@@ -82,24 +82,29 @@
                     </button>
                     <span id="chatUser" class="fw-bold ms-2"></span>
                 </div>
+
                 <div>
-                    <button class="btn btn-light me-2" onclick="showQR()">
+                    <button id="groupQrBtn" class="btn btn-light me-2" onclick="showQR()">
                         <i class="bi bi-qr-code"></i>
                     </button>
 
-                    <button class="btn btn-light me-2" onclick="scanQR()">
+                    <button id="groupScanBtn" class="btn btn-light me-2" onclick="scanQR()">
                         <i class="bi bi-camera"></i>
                     </button>
+
                     <button class="btn btn-light me-2" onclick="openSettings()">
                         <i class="bi bi-gear"></i>
                     </button>
-                    <button class="btn btn-light me-2" onclick="addMemberToGroup()">
+
+                    <button id="groupAddBtn" class="btn btn-light me-2" onclick="addMemberToGroup()">
                         <i class="bi bi-person-plus"></i>
                     </button>
+
                     <button id="deleteBtn" class="btn btn-danger btn-sm">
                         <i class="bi bi-trash3"></i>
                     </button>
-                    <button class="btn btn-danger" onclick="leaveGroup()">
+
+                    <button id="groupLeaveBtn" class="btn btn-danger btn-sm" onclick="leaveGroup()">
                         <i class="bi bi-arrow-bar-left"></i>
                     </button>
                 </div>
