@@ -83,7 +83,7 @@
                     <span id="chatUser" class="fw-bold ms-2"></span>
                 </div>
 
-                <div>
+                <div id="roomActionButtons">
                     <button id="groupQrBtn" class="btn btn-light me-2" onclick="showQR()">
                         <i class="bi bi-qr-code"></i>
                     </button>
@@ -113,7 +113,16 @@
             <div id="messages"></div>
 
             <div class="input-group mt-2">
-                <input type="file" id="fileInput" class="form-control">
+                <div class="d-flex align-items-center gap-2">
+                    <label for="cameraInput" class="btn btn-light m-0">
+                        <i class="bi bi-paperclip"></i>
+                    </label>
+                    <input type="file" id="fileInput" class="form-control" style="display:none">
+                    <label for="cameraInput" class="btn btn-light m-0">
+                        <i class="bi bi-camera"></i>
+                    </label>
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+                </div>
                 <input id="msgInput" class="form-control" placeholder="メッセージを入力">
                 <button onclick="sendMsg()" class="btn btn-success">
                     <i class="bi bi-send"></i>

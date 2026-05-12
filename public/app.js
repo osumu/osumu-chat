@@ -30,8 +30,10 @@ window.onload = async () => {
         confirmDeleteRoom(window.currentRoom);
     };
 
+    camera()
     await registerDevice();
     await ensureProfile();
+    lockProfileFields();
     await checkInvite();
     await loadChats();
 
@@ -45,6 +47,17 @@ window.onload = async () => {
 
     subscribeMessages();
 };
+
+function camera() {
+    document.getElementById("cameraInput")
+        .addEventListener("change", e => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            document.getElementById("fileInput").files = dt.files;
+        });
+}
 
 async function checkNotificationPermission() {
     if (!("Notification" in window)) return;
@@ -274,6 +287,7 @@ function openIconPickerForProfile() {
 }
 
 async function openProfile() {
+
     const { data, error } = await client
         .from("profiles")
         .select("*")
@@ -292,97 +306,163 @@ async function openProfile() {
     Swal.fire({
         width: 620,
         showConfirmButton: false,
+
         html: `
         <div class="text-start">
 
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h3 class="m-0">プロフィール</h3>
-                <button class="btn btn-sm" onclick="Swal.close()">✕</button>
-            </div>
 
-            <!-- 公開設定 -->
-            <div class="mb-2">
-                <label class="form-label">プロフィール公開</label>
-                <select id="profilePublic" class="form-control">
-                    <option value="true" ${data.is_public ? "selected" : ""}>公開</option>
-                    <option value="false" ${!data.is_public ? "selected" : ""}>非公開</option>
-                </select>
-            </div>
-
-            <!-- アバター -->
-            <div class="text-center mb-3">
-                <div id="profileAvatar" style="font-size:48px">
-                    ${renderAvatar(data.avatar)}
-                </div>
-
-                <button class="btn btn-outline-primary btn-sm mt-2"
-                    onclick="openIconPickerForProfile()">
-                    アバター変更
+                <button class="btn btn-sm"
+                    onclick="Swal.close()">
+                    ✕
                 </button>
             </div>
 
-            <button class="btn btn-outline-dark me-3" onclick="addQR()">
-                <span>QR表示</span>
-            </button>
+            <div class="mb-3 text-center">
 
-            <!-- 基本情報 -->
-            <label class="form-label">ユーザー名</label>
-            <input id="profileUsername" class="form-control mb-2"
-                value="${escapeHTML(data.username || "")}">
+                <div id="profileAvatar"
+                     style="font-size:48px">
+                    ${renderAvatar(data.avatar)}
+                </div>
 
-            <label class="form-label">表示名</label>
-            <input id="profileName" class="form-control mb-2"
-                value="${escapeHTML(data.name || "")}">
+                <button
+                    class="btn btn-outline-primary btn-sm mt-2"
+                    onclick="openIconPickerForProfile()">
 
-            <label class="form-label">PIN</label>
-            <input id="profilePin" class="form-control mb-3"
-                maxlength="6"
-                value="${escapeHTML(data.pin || "")}">
+                    アバター変更
 
-            <!-- 拡張 -->
-            <label class="form-label">自己紹介</label>
-            <textarea id="profileBio" class="form-control mb-2"
-                rows="3">${escapeHTML(data.bio || "")}</textarea>
-
-            <div class="small text-muted mb-3">
-                ${linkify?.(data.bio || "")}
+                </button>
             </div>
 
-            <label class="form-label">Webサイト</label>
-            <input id="profileWebsite" class="form-control mb-2"
+            <div class="mb-3">
+                <label class="form-label">
+                    プロフィール公開
+                </label>
+
+                <select id="profilePublic"
+                    class="form-control">
+
+                    <option value="true"
+                        ${data.is_public ? "selected" : ""}>
+                        公開
+                    </option>
+
+                    <option value="false"
+                        ${!data.is_public ? "selected" : ""}>
+                        非公開
+                    </option>
+
+                </select>
+            </div>
+
+            <button class="btn btn-outline-dark mb-3"
+                onclick="addQR()">
+
+                QR表示
+
+            </button>
+
+            <label class="form-label">
+                ユーザー名
+            </label>
+
+            <input
+                id="profileUsername"
+                class="form-control mb-2"
+                readonly
+                value="${escapeHTML(data.username || "")}">
+
+            <label class="form-label">
+                表示名
+            </label>
+
+            <input
+                id="profileName"
+                class="form-control mb-2"
+                value="${escapeHTML(data.name || "")}">
+
+            <label class="form-label">
+                PIN
+            </label>
+
+            <input
+                id="profilePin"
+                class="form-control mb-3"
+                readonly
+                value="${escapeHTML(data.pin || "")}">
+
+            <label class="form-label">
+                自己紹介
+            </label>
+
+            <textarea
+                id="profileBio"
+                class="form-control mb-2"
+                rows="3">${escapeHTML(data.bio || "")}</textarea>
+
+            <label class="form-label">
+                Webサイト
+            </label>
+
+            <input
+                id="profileWebsite"
+                class="form-control mb-2"
                 value="${escapeHTML(data.website || "")}">
 
             ${data.website ? `
                 <div class="border rounded p-2 mb-3 small">
-                    🌐 <a href="${data.website}" target="_blank">${data.website}</a>
+                    🌐
+                    <a href="${data.website}"
+                       target="_blank">
+
+                        ${escapeHTML(data.website)}
+
+                    </a>
                 </div>
             ` : ""}
 
-            <label class="form-label">誕生日</label>
-            <input id="profileBirthday" type="date" class="form-control mb-2"
+            <label class="form-label">
+                誕生日
+            </label>
+
+            <input
+                id="profileBirthday"
+                type="date"
+                class="form-control mb-2"
                 value="${data.birthday || ""}">
 
             <div class="mb-3">
-                ${data.birthday_hidden
-                ? `<button class="btn btn-sm btn-outline-secondary" onclick="unlockBirthday()">年齢を表示</button>`
-                : (age ? `🎂 ${age}歳` : "未設定")
-            }
+                ${age ? `🎂 ${age}歳` : "未設定"}
             </div>
 
-            <label class="form-label">場所</label>
-            <input id="profileLocation" class="form-control mb-4"
+            <label class="form-label">
+                場所
+            </label>
+
+            <input
+                id="profileLocation"
+                class="form-control mb-4"
                 value="${escapeHTML(data.location || "")}">
 
-            <!-- 情報 -->
             <div class="small text-muted border-top pt-2">
-                <div>ユーザーID: ${data.id}</div>
-                <div>作成日時: ${formatDate(data.created_at)}</div>
+                <div>
+                    ID:
+                    ${data.id}
+                </div>
+
+                <div>
+                    作成日時:
+                    ${formatDate(data.created_at)}
+                </div>
             </div>
 
-            <!-- 保存 -->
             <div class="text-center mt-4">
-                <button class="btn btn-success" onclick="saveProfile()">
+                <button class="btn btn-success"
+                    onclick="saveProfile()">
+
                     保存
+
                 </button>
             </div>
 
@@ -392,40 +472,51 @@ async function openProfile() {
 }
 
 async function saveProfile() {
-    const username = document.getElementById("profileUsername").value.trim();
-    const name = document.getElementById("profileName").value.trim();
-    const pin = document.getElementById("profilePin").value.trim();
 
-    const bio = document.getElementById("profileBio").value;
-    const website = document.getElementById("profileWebsite").value.trim();
-    const birthday = document.getElementById("profileBirthday").value;
-    const location = document.getElementById("profileLocation").value.trim();
+    const name =
+        document.getElementById("profileName")
+            .value.trim();
 
-    const avatar = window.profileAvatarValue ?? null;
+    const bio =
+        document.getElementById("profileBio")
+            .value;
 
-    if (!username || !name || !pin) {
-        return swalError("必須項目が未入力です");
-    }
+    const website =
+        document.getElementById("profileWebsite")
+            .value.trim();
 
-    if (!/^\d{6}$/.test(pin)) {
-        return swalError("PINは6桁の数字です");
-    }
+    const birthday =
+        document.getElementById("profileBirthday")
+            .value;
+
+    const location =
+        document.getElementById("profileLocation")
+            .value.trim();
+
+    const is_public =
+        document.getElementById("profilePublic")
+            .value === "true";
+
+    const avatar =
+        window.profileAvatarValue ?? null;
 
     if (website && !website.startsWith("http")) {
-        return swalError("Webサイトは http か https で始めてください");
+
+        return swalError(
+            "Webサイトは http / https で始めてください"
+        );
     }
 
     const { error } = await client
         .from("profiles")
         .update({
-            username,
             name,
-            pin,
             avatar,
             bio,
             website,
             birthday,
-            location
+            location,
+            is_public
         })
         .eq("id", user.id);
 
@@ -433,17 +524,100 @@ async function saveProfile() {
         return swalError(error.message);
     }
 
-    localStorage.setItem("username", username);
-
     await applyIcon(true);
     await loadChats();
 
     swalSuccess("プロフィールを更新しました");
 }
 
+async function openReadOnlyProfile(userId) {
+
+    const { data: profile } = await client
+        .from("profiles")
+        .select(`
+            avatar,
+            name,
+            username,
+            bio,
+            website,
+            birthday,
+            location,
+            created_at,
+            is_public
+        `)
+        .eq("id", userId)
+        .maybeSingle();
+
+    if (!profile) {
+        return swalError("プロフィールが存在しません");
+    }
+
+    if (!profile.is_public) {
+        return swalError("このプロフィールは非公開です");
+    }
+
+    const age = calcAge?.(profile.birthday);
+
+    Swal.fire({
+        width: 460,
+        showConfirmButton: false,
+
+        html: `
+        <div class="text-center">
+            <div class="avatar mx-auto mb-3"
+                 style="width:90px;height:90px">
+                ${renderAvatar(profile.avatar)}
+            </div>
+
+            <h4>
+                ${escapeHTML(profile.name || "User")}
+            </h4>
+
+            <div class="text-muted small mb-3">
+                @${escapeHTML(profile.username || "")}
+            </div>
+
+            <p class="small">
+                ${escapeHTML(profile.bio || "")}
+            </p>
+
+            ${profile.website ? `
+                <div class="mb-2">
+                    Webサイト
+                    <a href="${profile.website}"
+                       target="_blank">
+
+                        ${escapeHTML(profile.website)}
+
+                    </a>
+                </div>
+            ` : ""}
+
+            ${profile.location ? `
+                <div class="small text-muted mb-2">
+                    場所
+                    ${escapeHTML(profile.location)}
+                </div>
+            ` : ""}
+
+            ${age ? `
+                <div class="small text-muted mb-2">
+                    ${age}歳
+                </div>
+            ` : ""}
+
+            <div class="small text-muted mt-3">
+                作成日:
+                ${new Date(profile.created_at)
+                .toLocaleDateString()}
+            </div>
+
+        </div>
+        `
+    });
+}
 
 // チャット一覧
-
 async function loadChats() {
     try {
         const chatList = document.getElementById("chatList");
@@ -613,6 +787,15 @@ async function openRoom(id, name) {
     );
 
     await loadMessages();
+
+    if (!room.is_group) {
+        const users = memberMap.get(room.id) || [];
+        const otherId = users.find(x => x !== user.id);
+
+        if (otherId) {
+            await addProfileButton(otherId);
+        }
+    }
 }
 
 // 戻る
@@ -773,8 +956,13 @@ async function sendMsg() {
 
         if (error) throw error;
 
+        await loadMessages();
+
         input.value = "";
-        if (fileInput) fileInput.value = "";
+
+        if (fileInput) {
+            fileInput.value = "";
+        }
 
     } catch (e) {
         swalError(e.message || "送信失敗");
