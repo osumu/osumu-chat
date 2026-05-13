@@ -788,7 +788,7 @@ async function openRoom(id, name) {
     await loadMessages();
 
     if (!room.is_group) {
-        const users = memberMap.get(room.id) || [];
+        const users = window.memberMap.get(room.id) || [];
         const otherId = users.find(x => x !== user.id);
 
         if (otherId) {
@@ -1380,15 +1380,47 @@ function scanQR() {
                 { facingMode: "environment" },
                 { fps: 10, qrbox: 240 },
                 async (decoded) => {
-                    await qr.stop();
+                    await stopQRScanner();
                     Swal.close();
 
                     handleQR(decoded);
                 }
             );
+        },
+
+        willClose: async () => {
+            await stopQRScanner();
         }
     });
 }
+
+let qrScanner = null;
+
+async function stopQRScanner() {
+    if (!qrScanner) return;
+
+    try {
+        await qrScanner.stop();
+    } catch (_) { }
+
+    try {
+        await qrScanner.clear();
+    } catch (_) { }
+
+    document.querySelectorAll("video").forEach(v => {
+        const stream = v.srcObject;
+
+        if (stream) {
+            stream.getTracks()
+                .forEach(t => t.stop());
+        }
+
+        v.srcObject = null;
+    });
+
+    qrScanner = null;
+}
+
 
 async function joinRoom(roomId) {
     await client
@@ -1849,40 +1881,45 @@ function applySettings() {
 }
 
 async function addMemberToGroup() {
-    const { value } = await Swal.fire({
-        title: "PIN入力",
+    if (!currentRoom) return;
+
+    const { value: pin } = await Swal.fire({
+        title: "メンバー追加",
         input: "text",
-        showCancelButton: true,
+        inputLabel: "相手のPINコード",
+        inputPlaceholder: "6桁PIN",
+        confirmButtonText: "追加",
+        showCancelButton: true
     });
 
-    if (!value) return;
+    if (!pin) return;
 
-    const { data } = await client
+    const { data: addedProfile, error: profileError } = await client
         .from("profiles")
-        .select("*")
-        .eq("pin", value)
-        .single();
+        .select("id, name")
+        .eq("pin", pin)
+        .maybeSingle();
 
-    if (!data) {
-        swalError("見つかりません");
-        return;
+    if (profileError || !addedProfile) {
+        return swalError("ユーザーが見つかりません");
     }
 
-    await client.from("room_members").upsert(
-        {
+    const { error } = await client
+        .from("room_members")
+        .insert({
             room_id: currentRoom,
-            user_id: data.id,
-        },
-        {
-            onConflict:
-                "room_id,user_id",
-        }
-    );
+            user_id: addedProfile.id
+        });
+
+    if (error) {
+        return swalError(error.message);
+    }
+
+    notifyMessage({
+        content: `${addedProfile.name} をグループに追加しました`
+    });
 
     swalSuccess("追加しました");
-    notifyMessage({
-        content: `${addedProfile.data?.name || "ユーザー"} をグループに追加しました`
-    });
 }
 
 async function leaveGroup() {
