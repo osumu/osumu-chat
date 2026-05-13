@@ -33,7 +33,6 @@ window.onload = async () => {
     camera()
     await registerDevice();
     await ensureProfile();
-    lockProfileFields();
     await checkInvite();
     await loadChats();
 
