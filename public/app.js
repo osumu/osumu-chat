@@ -999,75 +999,152 @@ function linkify(text = "") {
     );
 }
 
+function appendMessage(msg) {
+    const container =
+        document.getElementById("messages");
+
+    const div =
+        document.createElement("div");
+
+    div.className = "message";
+
+    div.id = `msg-${msg.id}`;
+
+    div.innerHTML =
+        renderMessageContent(msg);
+
+    container.appendChild(div);
+}
+
+function updateMessage(msg) {
+    const el =
+        document.getElementById(`msg-${msg.id}`);
+
+    if (!el) return;
+
+    el.innerHTML =
+        renderMessageContent(msg);
+}
+
+function removeMessage(id) {
+    document
+        .getElementById(`msg-${id}`)
+        ?.remove();
+}
+
+function scrollToBottom() {
+    const container =
+        document.getElementById("messages");
+
+    container.scrollTop =
+        container.scrollHeight;
+}
+
+
 // リアルタイム
+let channel = null;
 
 function subscribeMessages() {
+
     if (channel) {
         client.removeChannel(channel);
     }
 
-    channel = client.channel("chat-realtime")
+    channel = client
+        .channel("chat-realtime")
+        .on(
+            "postgres_changes",
+            {
+                event: "INSERT",
+                schema: "public",
+                table: "messages"
+            },
+            payload => {
+                const msg = payload.new;
+                if (msg.sender_id !== user.id) {
 
+                    notifyMessage(msg);
 
-        // メッセージ受信
+                    const s = JSON.parse(
+                        localStorage.getItem("settings") || "{}"
+                    );
 
-        .on("postgres_changes", {
-            event: "INSERT",
-            schema: "public",
-            table: "messages"
-        }, (payload) => {
+                    if (s.notify !== "silent") {
+                        audio.currentTime = 0;
+                        audio.play().catch(() => { });
+                    }
+                }
 
-            const msg = payload.new;
+                if (
+                    currentRoom &&
+                    msg.room_id === currentRoom
+                ) {
+                    appendMessage(msg);
+                    scrollToBottom();
+                    markAsReadBatch();
+                }
 
-            // 🔔 他人のメッセージのみ通知
-            if (msg.sender_id !== user.id) {
-                notifyMessage(msg);
+                // 一覧更新
+                loadChats();
+            }
+        )
 
-                const s = JSON.parse(localStorage.getItem("settings") || "{}");
+        .on(
+            "postgres_changes",
+            {
+                event: "UPDATE",
+                schema: "public",
+                table: "messages"
+            },
+            payload => {
 
-                if (s.notify !== "silent") {
-                    audio.currentTime = 0;
-                    audio.play().catch(() => { });
+                const msg = payload.new;
+
+                updateMessage(msg);
+            }
+        )
+
+        .on(
+            "postgres_changes",
+            {
+                event: "DELETE",
+                schema: "public",
+                table: "messages"
+            },
+            payload => {
+
+                removeMessage(payload.old.id);
+            }
+        )
+
+        .on(
+            "postgres_changes",
+            {
+                event: "INSERT",
+                schema: "public",
+                table: "room_members"
+            },
+            payload => {
+
+                const row = payload.new;
+
+                if (row.user_id === user.id) {
+
+                    loadChats();
+
+                    Swal.fire({
+                        toast: true,
+                        position: "top-end",
+                        timer: 2000,
+                        showConfirmButton: false,
+                        title: "新しいチャットに追加されました"
+                    });
                 }
             }
+        )
 
-            // 📩 今開いてる部屋
-            if (currentRoom && msg.room_id === currentRoom) {
-                loadMessages();
-                markAsReadBatch();
-            }
-
-            // 📋 一覧更新
-            loadChats();
-        })
-
-
-        // ルーム参加検知（重要）
-
-        .on("postgres_changes", {
-            event: "INSERT",
-            schema: "public",
-            table: "room_members"
-        }, (payload) => {
-
-            const row = payload.new;
-
-            if (row.user_id === user.id) {
-                loadChats();
-
-                Swal.fire({
-                    toast: true,
-                    position: "top-end",
-                    timer: 2000,
-                    showConfirmButton: false,
-                    title: "新しいチャットに追加されました"
-                });
-            }
-        })
-
-        .subscribe();
+        .subscribe(status => { console.log(status); });
 }
-
 
 // 追加
 async function openAdd() {
@@ -2310,7 +2387,6 @@ const noExtMap = {
 
 const mimeCache = new Map();
 
-/** HTMLエスケープ */
 function escapeHTML(str = "") {
     return String(str)
         .replaceAll("&", "&amp;")
@@ -2319,73 +2395,91 @@ function escapeHTML(str = "") {
         .replaceAll('"', "&quot;");
 }
 
-/** URLから拡張子取得 */
-function getExt(url = "") {
-    const clean = decodeURIComponent(url.split("?")[0].split("#")[0]);
-    const name = clean.split("/").pop().toLowerCase();
-
-    const idx = name.lastIndexOf(".");
-    return idx >= 0 ? name.slice(idx + 1) : "";
+function nl2br(str = "") {
+    return escapeHTML(str).replace(/\n/g, "<br>");
 }
 
-/** 拡張子→タイプ */
+function getExt(url = "") {
+
+    const clean = decodeURIComponent(
+        url.split("?")[0].split("#")[0]
+    );
+
+    const name = clean
+        .split("/")
+        .pop()
+        .toLowerCase();
+
+    /* 拡張子なし特別ファイル */
+    if (noExtMap[name]) {
+        return noExtMap[name];
+    }
+
+    const idx = name.lastIndexOf(".");
+
+    return idx >= 0
+        ? name.slice(idx + 1)
+        : "";
+}
+
 function findFileType(ext) {
     for (const [type, list] of Object.entries(fileTypes)) {
-        if (list.includes(ext)) return type;
+        if (list.includes(ext)) {
+            return type;
+        }
     }
+
     return "unknown";
 }
 
-/** MIME取得 */
 async function getMimeType(url) {
-    if (mimeCache.has(url)) return mimeCache.get(url);
-
-    let mime = "";
-    try {
-        const res = await fetch(url, { method: "HEAD" });
-        mime = res.headers.get("content-type") || "";
-    } catch {
-        try {
-            const res = await fetch(url);
-            mime = res.headers.get("content-type") || "";
-        } catch {}
+    if (mimeCache.has(url)) {
+        return mimeCache.get(url);
     }
 
+    let mime = "";
+
+    try {
+        const res = await fetch(url, {
+            method: "HEAD"
+        });
+
+        mime = res.headers.get("content-type") || "";
+    } catch { }
+
     mimeCache.set(url, mime);
+
     return mime;
 }
 
-/** MIME→タイプ */
 function getTypeFromMime(mime = "") {
     mime = mime.toLowerCase();
 
     if (mime.startsWith("image/")) return "image";
     if (mime.startsWith("video/")) return "video";
     if (mime.startsWith("audio/")) return "audio";
+
     if (mime.includes("pdf")) return "pdf";
 
-    if (mime.includes("text") || mime.includes("json") || mime.includes("xml")) {
+    if (
+        mime.includes("text") ||
+        mime.includes("json") ||
+        mime.includes("xml")
+    ) {
         return "text";
-    }
-
-    if (mime.includes("javascript") || mime.includes("html") || mime.includes("css")) {
-        return "code";
-    }
-
-    if (mime.includes("zip") || mime.includes("compressed")) {
-        return "archive";
-    }
-
-    if (mime.includes("msword") || mime.includes("officedocument")) {
-        return "office";
     }
 
     return "unknown";
 }
 
+/* =========================
+   プレビュー生成
+========================= */
+
 function createImagePreview(url) {
     return `
-        <img src="${escapeHTML(url)}"
+        <img
+            src="${escapeHTML(url)}"
             class="msg-media msg-image"
             onclick="openPreview('${escapeHTML(url)}','image')">
     `;
@@ -2393,30 +2487,49 @@ function createImagePreview(url) {
 
 function createVideoPreview(url) {
     return `
-        <video src="${escapeHTML(url)}"
+        <video
             class="msg-media msg-video"
             muted
             playsinline
             preload="metadata"
             onclick="openPreview('${escapeHTML(url)}','video')">
+            <source src="${escapeHTML(url)}">
         </video>
     `;
 }
 
 function createAudioPreview(url) {
     return `
-        <audio class="msg-audio" controls preload="metadata">
+        <audio
+            class="msg-audio"
+            controls>
             <source src="${escapeHTML(url)}">
         </audio>
     `;
 }
 
+/* =========================
+   メッセージ描画
+========================= */
+
 function renderMessageContent(msg) {
+
+    let html = "";
+
+    if (msg.content) {
+        html += `
+            <div class="message-text">
+                ${nl2br(msg.content)}
+            </div>
+        `;
+    }
+
     if (!msg.file_url) {
-        return escapeHTML(msg.content || "");
+        return html;
     }
 
     const ext = getExt(msg.file_url);
+
     let type = findFileType(ext);
 
     if (type === "unknown") {
@@ -2424,32 +2537,48 @@ function renderMessageContent(msg) {
     }
 
     switch (type) {
+
         case "image":
-            return createImagePreview(msg.file_url);
+            html += createImagePreview(msg.file_url);
+            break;
 
         case "video":
-            return createVideoPreview(msg.file_url);
+            html += createVideoPreview(msg.file_url);
+            break;
 
         case "audio":
-            return createAudioPreview(msg.file_url);
+            html += createAudioPreview(msg.file_url);
+            break;
 
         case "pdf":
-            return `
-                <a href="#" onclick="openPreview('${msg.file_url}','pdf')">
+            html += `
+                <a
+                    href="#"
+                    onclick="openPreview('${escapeHTML(msg.file_url)}','pdf')">
                     PDFを表示
                 </a>
             `;
+            break;
 
         default:
-            return `
-                <a href="${escapeHTML(msg.file_url)}" target="_blank">
+            html += `
+                <a
+                    href="${escapeHTML(msg.file_url)}"
+                    target="_blank">
                     ファイルを開く
                 </a>
             `;
     }
+
+    return html;
 }
 
+/* =========================
+   モーダルプレビュー
+========================= */
+
 function openPreview(url, type) {
+
     const handlers = {
         image: renderImage,
         video: renderVideo,
@@ -2461,46 +2590,440 @@ function openPreview(url, type) {
 }
 
 function renderImage(url) {
+
     Swal.fire({
         width: 900,
-        html: `<img src="${escapeHTML(url)}" style="max-width:100%;max-height:80vh;border-radius:8px">`,
+
+        html: `
+            <img
+                src="${escapeHTML(url)}"
+                style="
+                    max-width:100%;
+                    max-height:80vh;
+                    border-radius:12px;
+                ">
+        `,
+
         showConfirmButton: false
     });
 }
 
 function renderVideo(url) {
+
     Swal.fire({
-        width: 900,
-        html: `<video controls autoplay style="max-width:100%;max-height:80vh">
+        width: 950,
+
+        html: `
+            <video
+                controls
+                autoplay
+                style="
+                    width:100%;
+                    max-height:80vh;
+                    border-radius:12px;
+                    background:#000;
+                ">
                 <source src="${escapeHTML(url)}">
-              </video>`,
+            </video>
+        `,
+
         showConfirmButton: false
     });
 }
 
 function renderAudio(url) {
+
     Swal.fire({
-        width: 650,
-        html: `<audio controls autoplay style="width:100%">
+        width: 600,
+
+        html: `
+            <audio
+                controls
+                autoplay
+                style="width:100%">
                 <source src="${escapeHTML(url)}">
-              </audio>`,
+            </audio>
+        `,
+
         showConfirmButton: false
     });
 }
 
 function renderPdf(url) {
+
     Swal.fire({
         width: "90%",
-        html: `<iframe src="${escapeHTML(url)}"
-                style="width:100%;height:80vh;border:none"></iframe>`,
+
+        html: `
+            <iframe
+                src="${escapeHTML(url)}"
+                style="
+                    width:100%;
+                    height:80vh;
+                    border:none;
+                    border-radius:12px;
+                ">
+            </iframe>
+        `,
+
         showConfirmButton: false
     });
 }
 
-function renderDownload(url, title = "ファイル") {
+/* =========================
+   テキスト読み込み
+========================= */
+
+async function fetchText(url) {
+
+    const res = await fetch(url);
+
+    if (!res.ok) {
+        throw new Error(`読み込み失敗 (${res.status})`);
+    }
+
+    return await res.text();
+}
+
+async function renderTextFile(url, title = "テキスト") {
+
+    const text = await fetchText(url);
+
     Swal.fire({
+        width: 950,
+
         title,
-        html: `<a href="${escapeHTML(url)}" target="_blank">開く / ダウンロード</a>`,
+
+        html: `
+            <pre style="
+                text-align:left;
+                max-height:75vh;
+                overflow:auto;
+                background:#111;
+                color:#eee;
+                padding:18px;
+                border-radius:12px;
+                white-space:pre-wrap;
+                word-break:break-word;
+            ">${escapeHTML(text)}</pre>
+        `,
+
         showConfirmButton: false
     });
+}
+
+/* =========================
+   コード表示
+========================= */
+
+async function renderCode(url) {
+
+    const text = await fetchText(url);
+
+    Swal.fire({
+        width: 1000,
+
+        html: `
+            <pre style="
+                text-align:left;
+                max-height:75vh;
+                overflow:auto;
+                border-radius:12px;
+            ">
+                <code id="codeBlock">
+${escapeHTML(text)}
+                </code>
+            </pre>
+        `,
+
+        showConfirmButton: false,
+
+        didOpen: () => {
+
+            if (window.hljs) {
+
+                hljs.highlightElement(
+                    document.getElementById("codeBlock")
+                );
+            }
+        }
+    });
+}
+
+/* =========================
+   CSV
+========================= */
+
+async function renderCSV(url) {
+
+    const text = await fetchText(url);
+
+    const rows = text
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .slice(0, 100)
+        .map(row => row.split(","));
+
+    Swal.fire({
+        width: 1000,
+
+        html: `
+            <div style="
+                max-height:75vh;
+                overflow:auto;
+            ">
+                <table class="table table-bordered table-sm">
+                    ${rows.map(row => `
+                        <tr>
+                            ${row.map(cell => `
+                                <td>${escapeHTML(cell)}</td>
+                            `).join("")}
+                        </tr>
+                    `).join("")}
+                </table>
+            </div>
+        `,
+
+        showConfirmButton: false
+    });
+}
+
+/* =========================
+   XLSX
+========================= */
+
+async function renderXlsx(url) {
+
+    const res = await fetch(url);
+
+    const buf = await res.arrayBuffer();
+
+    const wb = XLSX.read(buf, {
+        type: "array"
+    });
+
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+
+    const rows = XLSX.utils
+        .sheet_to_json(sheet, {
+            header: 1
+        })
+        .slice(0, 100);
+
+    Swal.fire({
+        width: 1000,
+
+        html: `
+            <div style="
+                max-height:75vh;
+                overflow:auto;
+            ">
+                <table class="table table-bordered table-sm">
+                    ${rows.map(row => `
+                        <tr>
+                            ${row.map(cell => `
+                                <td>
+                                    ${escapeHTML(String(cell ?? ""))}
+                                </td>
+                            `).join("")}
+                        </tr>
+                    `).join("")}
+                </table>
+            </div>
+        `,
+
+        showConfirmButton: false
+    });
+}
+
+/* =========================
+   DOCX
+========================= */
+
+async function renderDocx(url) {
+
+    const res = await fetch(url);
+
+    const buf = await res.arrayBuffer();
+
+    const result = await mammoth.convertToHtml({
+        arrayBuffer: buf
+    });
+
+    Swal.fire({
+        width: 1000,
+
+        html: `
+            <div style="
+                text-align:left;
+                max-height:75vh;
+                overflow:auto;
+            ">
+                ${result.value}
+            </div>
+        `,
+
+        showConfirmButton: false
+    });
+}
+
+/* =========================
+   ZIP
+========================= */
+
+async function renderZip(url) {
+
+    const res = await fetch(url);
+
+    const blob = await res.blob();
+
+    const zip = await JSZip.loadAsync(blob);
+
+    const files = [];
+
+    zip.forEach((path, file) => {
+
+        if (!file.dir) {
+            files.push(path);
+        }
+    });
+
+    Swal.fire({
+        width: 700,
+
+        html: `
+            <div style="
+                text-align:left;
+                max-height:70vh;
+                overflow:auto;
+            ">
+                ${files.map(file => `
+                    <div style="padding:6px 0">
+                        ${escapeHTML(file)}
+                    </div>
+                `).join("")}
+            </div>
+        `,
+
+        showConfirmButton: false
+    });
+}
+
+/* =========================
+   ダウンロード
+========================= */
+
+function renderDownload(url, title = "ファイル") {
+
+    Swal.fire({
+        title,
+
+        html: `
+            <a
+                href="${escapeHTML(url)}"
+                target="_blank"
+                class="btn btn-primary">
+                開く / ダウンロード
+            </a>
+        `,
+
+        showConfirmButton: false
+    });
+}
+
+/* =========================
+   メイン
+========================= */
+
+async function loadFile(url) {
+
+    try {
+
+        const ext = getExt(url);
+
+        let type = findFileType(ext);
+
+        if (type === "unknown") {
+
+            const mime = await getMimeType(url);
+
+            type = getTypeFromMime(mime);
+        }
+
+        const handlers = {
+
+            image: () => renderImage(url),
+
+            video: () => renderVideo(url),
+
+            audio: () => renderAudio(url),
+
+            pdf: () => renderPdf(url),
+
+            text: async () => {
+
+                if (ext === "csv") {
+                    return renderCSV(url);
+                }
+
+                return renderTextFile(url);
+            },
+
+            code: async () => {
+                return renderCode(url);
+            },
+
+            office: async () => {
+
+                if (
+                    ["xlsx", "xls", "xlsm"].includes(ext)
+                ) {
+                    return renderXlsx(url);
+                }
+
+                if (ext === "docx") {
+                    return renderDocx(url);
+                }
+
+                return renderDownload(
+                    url,
+                    "Officeファイル"
+                );
+            },
+
+            archive: async () => {
+
+                if (ext === "zip") {
+                    return renderZip(url);
+                }
+
+                return renderDownload(
+                    url,
+                    "圧縮ファイル"
+                );
+            },
+
+            unknown: () => {
+                window.open(url, "_blank");
+            }
+        };
+
+        const handler =
+            handlers[type] ||
+            handlers.unknown;
+
+        await handler();
+
+    } catch (err) {
+
+        console.error(err);
+
+        Swal.fire({
+            icon: "error",
+            title: "エラー",
+            text:
+                err?.message ||
+                "ファイルを開けませんでした"
+        });
+    }
 }

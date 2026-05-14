@@ -123,7 +123,7 @@
                     </label>
                     <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
                 </div>
-                <input id="msgInput" class="form-control" placeholder="メッセージを入力">
+                <textarea id="msgInput" class="form-control" rows="1" placeholder="メッセージを入力"></textarea>
                 <button onclick="sendMsg()" class="btn btn-success">
                     <i class="bi bi-send"></i>
                 </button>
@@ -134,6 +134,13 @@
         if ("serviceWorker" in navigator) {
             navigator.serviceWorker.register("service-worker.js");
         }
+
+        const input = document.getElementById("msgInput");
+
+        input.addEventListener("input", () => {
+            input.style.height = "auto";
+            input.style.height = input.scrollHeight + "px";
+        });
     </script>
     <script
         src="data:text/javascript;base64,Y29uc29sZS5sb2coYAogLmQ4OGIuICAuZDg4ODguIGRiICAgIGRiIC44OGIgIGQ4OC4gZGIgICAgZGIKLjhQICBZOC4gODgnICBZUCA4OCAgICA4OCA4OCdZYmRQJzg4IDg4ICAgIDg4Cjg4ICAgIDg4ICc4Ym8uICAgODggICAgODggODggIDg4ICA4OCA4OCAgICA4OAo4OCAgICA4OCAgICdZOGIuIDg4ICAgIDg4IDg4ICA4OCAgODggODggICAgODgKJzhiICBkOCcgZGIgICA4RCA4OGIgIGQ4OCA4OCAgODggIDg4IDg4YiAgZDg4CiAnWTg4UCcgICc4ODg4WScgflk4ODg4UCcgWVAgIFlQICBZUCB+WTg4ODhQJwoKCiAubzg4Yi4gZGIgICBkYiAgLmQ4Yi4gIGQ4ODg4ODhiCmQ4UCAgWTggODggICA4OCBkOCcgJzhiICd+fjg4fn4nCjhQICAgICAgODhvb284OCA4OG9vbzg4ICAgIDg4CjhiICAgICAgODh+fn44OCA4OH5+fjg4ICAgIDg4Clk4YiAgZDggODggICA4OCA4OCAgIDg4ICAgIDg4CiAnWTg4UCcgWVAgICBZUCBZUCAgIFlQICAgIFlQCmAp"></script>
