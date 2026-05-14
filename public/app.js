@@ -2308,9 +2308,9 @@ const noExtMap = {
     "contributors": "contributors"
 };
 
-
 const mimeCache = new Map();
 
+/** HTMLエスケープ */
 function escapeHTML(str = "") {
     return String(str)
         .replaceAll("&", "&amp;")
@@ -2319,19 +2319,16 @@ function escapeHTML(str = "") {
         .replaceAll('"', "&quot;");
 }
 
+/** URLから拡張子取得 */
 function getExt(url = "") {
-    const clean = decodeURIComponent(
-        url.split("?")[0].split("#")[0]
-    );
-
+    const clean = decodeURIComponent(url.split("?")[0].split("#")[0]);
     const name = clean.split("/").pop().toLowerCase();
-
-    if (noExtMap[name]) return noExtMap[name];
 
     const idx = name.lastIndexOf(".");
     return idx >= 0 ? name.slice(idx + 1) : "";
 }
 
+/** 拡張子→タイプ */
 function findFileType(ext) {
     for (const [type, list] of Object.entries(fileTypes)) {
         if (list.includes(ext)) return type;
@@ -2339,13 +2336,11 @@ function findFileType(ext) {
     return "unknown";
 }
 
+/** MIME取得 */
 async function getMimeType(url) {
-    if (mimeCache.has(url)) {
-        return mimeCache.get(url);
-    }
+    if (mimeCache.has(url)) return mimeCache.get(url);
 
     let mime = "";
-
     try {
         const res = await fetch(url, { method: "HEAD" });
         mime = res.headers.get("content-type") || "";
@@ -2353,75 +2348,122 @@ async function getMimeType(url) {
         try {
             const res = await fetch(url);
             mime = res.headers.get("content-type") || "";
-        } catch {
-            mime = "";
-        }
+        } catch {}
     }
 
     mimeCache.set(url, mime);
     return mime;
 }
 
+/** MIME→タイプ */
 function getTypeFromMime(mime = "") {
     mime = mime.toLowerCase();
 
     if (mime.startsWith("image/")) return "image";
     if (mime.startsWith("video/")) return "video";
     if (mime.startsWith("audio/")) return "audio";
-
     if (mime.includes("pdf")) return "pdf";
 
-    if (
-        mime.includes("text") ||
-        mime.includes("json") ||
-        mime.includes("xml")
-    ) {
+    if (mime.includes("text") || mime.includes("json") || mime.includes("xml")) {
         return "text";
     }
 
-    if (
-        mime.includes("javascript") ||
-        mime.includes("html") ||
-        mime.includes("css")
-    ) {
+    if (mime.includes("javascript") || mime.includes("html") || mime.includes("css")) {
         return "code";
     }
 
-    if (
-        mime.includes("zip") ||
-        mime.includes("compressed")
-    ) {
+    if (mime.includes("zip") || mime.includes("compressed")) {
         return "archive";
     }
 
-    if (
-        mime.includes("msword") ||
-        mime.includes("officedocument")
-    ) {
+    if (mime.includes("msword") || mime.includes("officedocument")) {
         return "office";
     }
 
     return "unknown";
 }
 
-async function fetchText(url) {
-    const res = await fetch(url);
+function createImagePreview(url) {
+    return `
+        <img src="${escapeHTML(url)}"
+            class="msg-media msg-image"
+            onclick="openPreview('${escapeHTML(url)}','image')">
+    `;
+}
 
-    if (!res.ok) {
-        throw new Error(`読み込み失敗 (${res.status})`);
+function createVideoPreview(url) {
+    return `
+        <video src="${escapeHTML(url)}"
+            class="msg-media msg-video"
+            muted
+            playsinline
+            preload="metadata"
+            onclick="openPreview('${escapeHTML(url)}','video')">
+        </video>
+    `;
+}
+
+function createAudioPreview(url) {
+    return `
+        <audio class="msg-audio" controls preload="metadata">
+            <source src="${escapeHTML(url)}">
+        </audio>
+    `;
+}
+
+function renderMessageContent(msg) {
+    if (!msg.file_url) {
+        return escapeHTML(msg.content || "");
     }
 
-    return await res.text();
+    const ext = getExt(msg.file_url);
+    let type = findFileType(ext);
+
+    if (type === "unknown") {
+        type = getTypeFromMime(msg.mime || "");
+    }
+
+    switch (type) {
+        case "image":
+            return createImagePreview(msg.file_url);
+
+        case "video":
+            return createVideoPreview(msg.file_url);
+
+        case "audio":
+            return createAudioPreview(msg.file_url);
+
+        case "pdf":
+            return `
+                <a href="#" onclick="openPreview('${msg.file_url}','pdf')">
+                    PDFを表示
+                </a>
+            `;
+
+        default:
+            return `
+                <a href="${escapeHTML(msg.file_url)}" target="_blank">
+                    ファイルを開く
+                </a>
+            `;
+    }
+}
+
+function openPreview(url, type) {
+    const handlers = {
+        image: renderImage,
+        video: renderVideo,
+        audio: renderAudio,
+        pdf: renderPdf
+    };
+
+    (handlers[type] || renderDownload)(url);
 }
 
 function renderImage(url) {
     Swal.fire({
         width: 900,
-        html: `
-            <img
-                src="${escapeHTML(url)}"
-                style="max-width:100%;max-height:80vh;border-radius:8px">
-        `,
+        html: `<img src="${escapeHTML(url)}" style="max-width:100%;max-height:80vh;border-radius:8px">`,
         showConfirmButton: false
     });
 }
@@ -2429,14 +2471,9 @@ function renderImage(url) {
 function renderVideo(url) {
     Swal.fire({
         width: 900,
-        html: `
-            <video
-                controls
-                autoplay
-                style="max-width:100%;max-height:80vh">
+        html: `<video controls autoplay style="max-width:100%;max-height:80vh">
                 <source src="${escapeHTML(url)}">
-            </video>
-        `,
+              </video>`,
         showConfirmButton: false
     });
 }
@@ -2444,11 +2481,9 @@ function renderVideo(url) {
 function renderAudio(url) {
     Swal.fire({
         width: 650,
-        html: `
-            <audio controls autoplay style="width:100%">
+        html: `<audio controls autoplay style="width:100%">
                 <source src="${escapeHTML(url)}">
-            </audio>
-        `,
+              </audio>`,
         showConfirmButton: false
     });
 }
@@ -2456,172 +2491,8 @@ function renderAudio(url) {
 function renderPdf(url) {
     Swal.fire({
         width: "90%",
-        html: `
-            <iframe
-                src="${escapeHTML(url)}"
-                style="width:100%;height:80vh;border:none">
-            </iframe>
-        `,
-        showConfirmButton: false
-    });
-}
-
-async function renderTextFile(url, title = "テキスト") {
-    const text = await fetchText(url);
-
-    Swal.fire({
-        width: 950,
-        title,
-        html: `
-            <pre style="
-                text-align:left;
-                max-height:70vh;
-                overflow:auto;
-                white-space:pre-wrap;
-                word-break:break-word;
-                background:#111;
-                color:#eee;
-                padding:16px;
-                border-radius:10px;
-            ">${escapeHTML(text)}</pre>
-        `,
-        showConfirmButton: false
-    });
-}
-
-async function renderCode(url) {
-    const text = await fetchText(url);
-
-    Swal.fire({
-        width: 950,
-        html: `
-            <pre style="
-                max-height:75vh;
-                overflow:auto;
-                text-align:left;
-            "><code id="codeBlock">${escapeHTML(text)}</code></pre>
-        `,
-        showConfirmButton: false,
-        didOpen: () => {
-            const el = document.getElementById("codeBlock");
-            if (window.hljs) {
-                hljs.highlightElement(el);
-            }
-        }
-    });
-}
-
-async function renderCSV(url) {
-    const text = await fetchText(url);
-
-    const rows = text
-        .split(/\r?\n/)
-        .filter(Boolean)
-        .slice(0, 100)
-        .map(row => row.split(","));
-
-    const html = `
-        <div style="max-height:70vh;overflow:auto">
-            <table class="table table-sm table-bordered">
-                ${rows.map(row => `
-                    <tr>
-                        ${row.map(v => `
-                            <td>${escapeHTML(v)}</td>
-                        `).join("")}
-                    </tr>
-                `).join("")}
-            </table>
-        </div>
-    `;
-
-    Swal.fire({
-        width: 950,
-        title: "CSV",
-        html,
-        showConfirmButton: false
-    });
-}
-
-async function renderXlsx(url) {
-    const res = await fetch(url);
-    const buf = await res.arrayBuffer();
-
-    const wb = XLSX.read(buf, {
-        type: "array"
-    });
-
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-
-    const rows = XLSX.utils
-        .sheet_to_json(sheet, { header: 1 })
-        .slice(0, 100);
-
-    const html = `
-        <div style="max-height:70vh;overflow:auto">
-            <table class="table table-sm table-bordered">
-                ${rows.map(row => `
-                    <tr>
-                        ${row.map(v => `
-                            <td>${escapeHTML(String(v ?? ""))}</td>
-                        `).join("")}
-                    </tr>
-                `).join("")}
-            </table>
-        </div>
-    `;
-
-    Swal.fire({
-        width: 950,
-        title: "Excel",
-        html,
-        showConfirmButton: false
-    });
-}
-
-async function renderDocx(url) {
-    const res = await fetch(url);
-    const buf = await res.arrayBuffer();
-
-    const result = await mammoth.convertToHtml({
-        arrayBuffer: buf
-    });
-
-    Swal.fire({
-        width: 950,
-        html: `
-            <div style="text-align:left;max-height:70vh;overflow:auto">
-                ${result.value}
-            </div>
-        `,
-        showConfirmButton: false
-    });
-}
-
-async function renderZip(url) {
-    const res = await fetch(url);
-    const blob = await res.blob();
-
-    const zip = await JSZip.loadAsync(blob);
-
-    const files = [];
-
-    zip.forEach((path, file) => {
-        if (!file.dir) {
-            files.push(path);
-        }
-    });
-
-    Swal.fire({
-        width: 700,
-        html: `
-            <div style="text-align:left">
-                ${files.map(f => `
-                    <div style="padding:6px 0">
-                        ${escapeHTML(f)}
-                    </div>
-                `).join("")}
-            </div>
-        `,
+        html: `<iframe src="${escapeHTML(url)}"
+                style="width:100%;height:80vh;border:none"></iframe>`,
         showConfirmButton: false
     });
 }
@@ -2629,112 +2500,7 @@ async function renderZip(url) {
 function renderDownload(url, title = "ファイル") {
     Swal.fire({
         title,
-        html: `
-            <a
-                href="${escapeHTML(url)}"
-                target="_blank"
-                class="btn btn-primary">
-                開く / ダウンロード
-            </a>
-        `,
+        html: `<a href="${escapeHTML(url)}" target="_blank">開く / ダウンロード</a>`,
         showConfirmButton: false
     });
-}
-
-async function loadFile(url) {
-    try {
-        const ext = getExt(url);
-
-        let type = findFileType(ext);
-
-        if (type === "unknown") {
-            const mime = await getMimeType(url);
-            type = getTypeFromMime(mime);
-        }
-
-        const handlers = {
-            image: () => renderImage(url),
-
-            video: () => renderVideo(url),
-
-            audio: () => renderAudio(url),
-
-            pdf: () => renderPdf(url),
-
-            text: async () => {
-                if (ext === "csv") {
-                    return renderCSV(url);
-                }
-
-                return renderTextFile(url);
-            },
-
-            code: async () => {
-                return renderCode(url);
-            },
-
-            office: async () => {
-                if (["xlsx", "xls", "xlsm", "xlsb"].includes(ext)) {
-                    return renderXlsx(url);
-                }
-
-                if (ext === "docx") {
-                    return renderDocx(url);
-                }
-
-                return renderDownload(url, "Officeファイル");
-            },
-
-            archive: async () => {
-                if (ext === "zip") {
-                    return renderZip(url);
-                }
-
-                return renderDownload(url, "圧縮ファイル");
-            },
-
-            executable: () => {
-                return renderDownload(url, "実行ファイル");
-            },
-
-            font: () => {
-                return renderDownload(url, "フォント");
-            },
-
-            ebook: () => {
-                return renderDownload(url, "電子書籍");
-            },
-
-            subtitle: async () => {
-                return renderTextFile(url, "字幕");
-            },
-
-            data: () => {
-                return renderDownload(url, "データ");
-            },
-
-            vector: () => {
-                return renderDownload(url, "ベクター");
-            },
-
-            three: () => {
-                return renderDownload(url, "3Dモデル");
-            },
-
-            unknown: () => {
-                window.open(url, "_blank");
-            }
-        };
-
-        await (handlers[type] || handlers.unknown)();
-
-    } catch (e) {
-        console.error(e);
-
-        Swal.fire(
-            "エラー",
-            e.message || "ファイルを開けませんでした",
-            "error"
-        );
-    }
 }
