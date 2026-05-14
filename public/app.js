@@ -25,6 +25,7 @@ window.onload = async () => {
     }
 
     user = authUser;
+    window.memberMap = new Map();
 
     document.getElementById("deleteBtn").onclick = () => {
         confirmDeleteRoom(window.currentRoom);
@@ -788,7 +789,7 @@ async function openRoom(id, name) {
     await loadMessages();
 
     if (!room.is_group) {
-        const users = window.memberMap.get(room.id) || [];
+        const users = window.memberMap?.get(room.id) || [];
         const otherId = users.find(x => x !== user.id);
 
         if (otherId) {
@@ -1270,15 +1271,15 @@ async function createGroup() {
 
     if (!value) return;
 
-    const { data: room, error } =
-        await client
-            .from("rooms")
-            .insert({
-                name: value,
-                is_group: true,
-            })
-            .select()
-            .single();
+    const { data: room, error } = await client
+        .from('rooms')
+        .insert({
+            name: 'test',
+            is_group: true,
+            owner_id: user.id
+        })
+        .select()
+        .single();
 
     if (error) {
         swalError("作成失敗");
