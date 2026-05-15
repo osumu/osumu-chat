@@ -617,6 +617,31 @@ async function openReadOnlyProfile(userId) {
     });
 }
 
+function renderMessageHTML(m, profiles = []) {
+
+    const isMe = m.sender_id === user.id;
+
+    const avatar = getMessageAvatar(m, profiles);
+
+    return `
+        <div class="msg-row ${isMe ? "me" : "you"}"
+             id="msg-${m.id}">
+
+            ${!isMe ? `
+                <div class="avatar-inline">
+                    ${avatar}
+                </div>
+            ` : ""}
+
+            <div class="bubble ${isMe ? "me" : "you"}">
+                ${m.content
+            ? `<div class="text">${linkify(m.content)}</div>`
+            : ""}
+            </div>
+        </div>
+    `;
+}
+
 // チャット一覧
 async function loadChats() {
     try {
@@ -755,7 +780,7 @@ async function loadChats() {
 
 // ルーム開く
 async function openRoom(id, name) {
-    currentRoom = id;
+    window.currentRoom = id;
 
     const { data: room } = await client
         .from("rooms")
@@ -807,20 +832,21 @@ function backList() {
     document.getElementById("chatListPage").style.display =
         "block";
 
-    currentRoom = null;
+    window.currentRoom = null;
 }
 
 
 // メッセージ一覧
 
 async function loadMessages() {
-    if (!currentRoom) return;
+    if (!window.currentRoom) return;
 
     const { data: messages } = await client
         .from("messages")
         .select("*")
-        .eq("room_id", currentRoom)
-        .order("created_at", { ascending: true });
+        .eq("room_id", window.currentRoom)
+        .order("created_at", { ascending: true })
+        .limit(200);
 
     const { data: profiles } = await client
         .from("profiles")
@@ -834,6 +860,20 @@ async function loadMessages() {
         const avatar = getMessageAvatar(m, profiles);
 
         const style = localStorage.getItem("bubbleStyle") || "tail";
+
+        const reactions = Array.isArray(m.reactions)
+            ? m.reactions
+            : [];
+
+        const grouped = reactions.reduce((acc, r) => {
+            if (!acc[r.emoji]) {
+                acc[r.emoji] = [];
+            }
+
+            acc[r.emoji].push(r.user_id);
+
+            return acc;
+        }, {});
 
         let bubbleClass = `bubble ${isMe ? "me" : "you"} ${style}`;
 
@@ -864,17 +904,119 @@ async function loadMessages() {
         }
 
         html += `
-            <div class="msg-row ${isMe ? "me" : "you"}">
+    <div class="msg-row ${isMe ? "me" : "you"}">
 
-                ${!isMe ? `<div class="avatar-inline">${avatar}</div>` : ""}
-
-                <div class="${bubbleClass}">
-                    ${body}
-                    <div class="meta">${formatDate(m.created_at)}</div>
+        ${!isMe
+                ? `
+                <div class="avatar-inline">
+                    ${avatar}
                 </div>
+            `
+                : ""}
+
+        <div class="${bubbleClass}">
+
+            ${body}
+
+            <!-- リアクション -->
+            <div class="msg-reactions">
+
+                ${Object.entries(grouped)
+                .map(([emoji, users]) => {
+
+                    const reacted =
+                        users.includes(user.id);
+
+                    return `
+                            <button
+                                class="reaction-chip ${reacted ? "active" : ""}"
+                                onclick="
+                                    (async()=>{
+
+                                        const { data: msg } =
+                                            await client
+                                                .from('messages')
+                                                .select('reactions')
+                                                .eq('id','${m.id}')
+                                                .single();
+
+                                        let reactions =
+                                            Array.isArray(msg?.reactions)
+                                                ? [...msg.reactions]
+                                                : [];
+
+                                        const index =
+                                            reactions.findIndex(v =>
+                                                v.user_id === user.id &&
+                                                v.emoji === '${emoji}'
+                                            );
+
+                                        if(index >= 0){
+
+                                            reactions.splice(index,1);
+
+                                        }else{
+
+                                            reactions.push({
+                                                user_id:user.id,
+                                                emoji:'${emoji}'
+                                            });
+                                        }
+
+                                        await client
+                                            .from('messages')
+                                            .update({
+                                                reactions
+                                            })
+                                            .eq('id','${m.id}');
+
+                                        loadMessages();
+
+                                    })()
+                                "
+                            >
+                                ${emoji}
+                                <span>${users.length}</span>
+                            </button>
+                        `;
+                })
+                .join("")}
+
+                <button
+                    class="reaction-add-btn"
+                    id="reaction-btn-${m.id}"
+                >
+                    😊
+                </button>
 
             </div>
-        `;
+
+            <!-- 下部 -->
+            <div class="meta-row">
+
+                <div class="meta">
+                    ${formatDate(m.created_at)}
+                </div>
+
+                ${isMe
+                ? `
+                        <div class="read-status">
+                            ${Array.isArray(m.read_by) &&
+                    m.read_by.filter(v => v !== user.id).length > 0
+                    ? `既読 ${m.read_by.filter(v => v !== user.id).length
+                    }`
+                    : "未読"
+                }
+                        </div>
+                    `
+                : ""}
+
+            </div>
+
+        </div>
+
+    </div>
+`;
 
         lastUser = m.sender_id;
     }
@@ -889,7 +1031,7 @@ async function loadMessages() {
 
 async function markAsReadBatch() {
     const { error } = await client.rpc("mark_messages_read", {
-        p_room_id: currentRoom,
+        p_room_id: window.currentRoom,
         p_user_id: user.id
     });
 
@@ -899,7 +1041,7 @@ async function markAsReadBatch() {
 
 // 送信
 async function sendMsg() {
-    if (sending || !currentRoom) return;
+    if (sending || !window.currentRoom) return;
 
     const input = document.getElementById("msgInput");
     const fileInput = document.getElementById("fileInput");
@@ -939,7 +1081,7 @@ async function sendMsg() {
         }
 
         const payload = {
-            room_id: currentRoom,
+            room_id: window.currentRoom,
             sender_id: user.id,
             file_url: fileUrl,
             read_by: [user.id]
@@ -1000,30 +1142,18 @@ function linkify(text = "") {
 }
 
 function appendMessage(msg) {
-    const container =
-        document.getElementById("messages");
+    const cnt = document.getElementById("messages");
 
-    const div =
-        document.createElement("div");
-
-    div.className = "message";
-
-    div.id = `msg-${msg.id}`;
-
-    div.innerHTML =
-        renderMessageContent(msg);
-
-    container.appendChild(div);
+    cnt.insertAdjacentHTML(
+        "beforeend",
+        renderMessageHTML(msg)
+    );
 }
 
 function updateMessage(msg) {
-    const el =
-        document.getElementById(`msg-${msg.id}`);
-
+    const el = document.getElementById(`msg-${msg.id}`);
     if (!el) return;
-
-    el.innerHTML =
-        renderMessageContent(msg);
+    el.outerHTML = renderMessageHTML(msg);
 }
 
 function removeMessage(id) {
@@ -1040,12 +1170,7 @@ function scrollToBottom() {
         container.scrollHeight;
 }
 
-
-// リアルタイム
-let channel = null;
-
 function subscribeMessages() {
-
     if (channel) {
         client.removeChannel(channel);
     }
@@ -1076,8 +1201,8 @@ function subscribeMessages() {
                 }
 
                 if (
-                    currentRoom &&
-                    msg.room_id === currentRoom
+                    window.currentRoom &&
+                    msg.room_id === window.currentRoom
                 ) {
                     appendMessage(msg);
                     scrollToBottom();
@@ -1148,11 +1273,11 @@ function subscribeMessages() {
 
 // 追加
 async function openAdd() {
-    const { data: room } = currentRoom
+    const { data: room } = window.currentRoom
         ? await client
             .from("rooms")
             .select("is_group")
-            .eq("id", currentRoom)
+            .eq("id", window.currentRoom)
             .single()
         : { data: null };
 
@@ -1351,7 +1476,7 @@ async function createGroup() {
     const { data: room, error } = await client
         .from('rooms')
         .insert({
-            name: 'test',
+            name: value.trim(),
             is_group: true,
             owner_id: user.id
         })
@@ -1422,7 +1547,7 @@ async function addQR() {
 function showQR() {
     const payload = encodeQR({
         type: "invite",
-        room_id: currentRoom
+        room_id: window.currentRoom
     });
 
     Swal.fire({
@@ -1886,7 +2011,7 @@ async function saveSettings() {
 
     localStorage.setItem("settings", JSON.stringify(localSettings));
 
-    if (currentRoom) {
+    if (window.currentRoom) {
         const roomSettings = {
             auto_delete: Number(document.getElementById("autoDelete").value),
             display_name: document.getElementById("displayName").value
@@ -1895,7 +2020,7 @@ async function saveSettings() {
         const { error } = await client
             .from("rooms")
             .update(roomSettings)
-            .eq("id", currentRoom);
+            .eq("id", window.currentRoom);
 
         if (error) {
             console.error(error);
@@ -1959,7 +2084,7 @@ function applySettings() {
 }
 
 async function addMemberToGroup() {
-    if (!currentRoom) return;
+    if (!window.currentRoom) return;
 
     const { value: pin } = await Swal.fire({
         title: "メンバー追加",
@@ -1985,7 +2110,7 @@ async function addMemberToGroup() {
     const { error } = await client
         .from("room_members")
         .insert({
-            room_id: currentRoom,
+            room_id: window.currentRoom,
             user_id: addedProfile.id
         });
 
@@ -2004,7 +2129,7 @@ async function leaveGroup() {
     await client
         .from("room_members")
         .delete()
-        .eq("room_id", currentRoom)
+        .eq("room_id", window.currentRoom)
         .eq("user_id", user.id);
 
     backList();
@@ -2399,56 +2524,55 @@ function nl2br(str = "") {
     return escapeHTML(str).replace(/\n/g, "<br>");
 }
 
+function safeURL(url) {
+    try {
+        const u = new URL(url);
+
+        if (
+            u.protocol === "http:" ||
+            u.protocol === "https:"
+        ) {
+            return u.href;
+        }
+    } catch (_) { }
+
+    return null;
+}
+
 function getExt(url = "") {
+    let clean = url;
 
-    const clean = decodeURIComponent(
-        url.split("?")[0].split("#")[0]
-    );
+    try {
+        clean = decodeURIComponent(url.split("?")[0].split("#")[0]);
+    } catch { }
 
-    const name = clean
-        .split("/")
-        .pop()
-        .toLowerCase();
+    const name = clean.split("/").pop()?.toLowerCase() || "";
 
-    /* 拡張子なし特別ファイル */
-    if (noExtMap[name]) {
-        return noExtMap[name];
-    }
+    if (noExtMap[name]) return noExtMap[name];
 
     const idx = name.lastIndexOf(".");
-
-    return idx >= 0
-        ? name.slice(idx + 1)
-        : "";
+    return idx >= 0 ? name.slice(idx + 1) : "";
 }
 
 function findFileType(ext) {
     for (const [type, list] of Object.entries(fileTypes)) {
-        if (list.includes(ext)) {
-            return type;
-        }
+        if (list.includes(ext)) return type;
     }
-
     return "unknown";
 }
 
+const mimeCache = new Map();
+
 async function getMimeType(url) {
-    if (mimeCache.has(url)) {
-        return mimeCache.get(url);
-    }
+    if (mimeCache.has(url)) return mimeCache.get(url);
 
     let mime = "";
-
     try {
-        const res = await fetch(url, {
-            method: "HEAD"
-        });
-
+        const res = await fetch(url, { method: "HEAD" });
         mime = res.headers.get("content-type") || "";
     } catch { }
 
     mimeCache.set(url, mime);
-
     return mime;
 }
 
@@ -2458,62 +2582,50 @@ function getTypeFromMime(mime = "") {
     if (mime.startsWith("image/")) return "image";
     if (mime.startsWith("video/")) return "video";
     if (mime.startsWith("audio/")) return "audio";
-
     if (mime.includes("pdf")) return "pdf";
 
-    if (
-        mime.includes("text") ||
-        mime.includes("json") ||
-        mime.includes("xml")
-    ) {
+    if (mime.includes("text") || mime.includes("json") || mime.includes("xml")) {
         return "text";
     }
 
     return "unknown";
 }
 
-/* =========================
-   プレビュー生成
-========================= */
-
 function createImagePreview(url) {
+    if (!safeUrl(url)) return "";
+
     return `
-        <img
-            src="${escapeHTML(url)}"
-            class="msg-media msg-image"
-            onclick="openPreview('${escapeHTML(url)}','image')">
+        <img src="${escapeHTML(url)}"
+             class="msg-media msg-image"
+             onclick="openPreview('${escapeHTML(url)}','image')">
     `;
 }
 
 function createVideoPreview(url) {
+    if (!safeUrl(url)) return "";
+
     return `
-        <video
-            class="msg-media msg-video"
-            muted
-            playsinline
-            preload="metadata"
-            onclick="openPreview('${escapeHTML(url)}','video')">
+        <video class="msg-media msg-video"
+               muted
+               playsinline
+               preload="none"
+               onclick="openPreview('${escapeHTML(url)}','video')">
             <source src="${escapeHTML(url)}">
         </video>
     `;
 }
 
 function createAudioPreview(url) {
+    if (!safeUrl(url)) return "";
+
     return `
-        <audio
-            class="msg-audio"
-            controls>
+        <audio class="msg-audio" controls preload="none">
             <source src="${escapeHTML(url)}">
         </audio>
     `;
 }
 
-/* =========================
-   メッセージ描画
-========================= */
-
 function renderMessageContent(msg) {
-
     let html = "";
 
     if (msg.content) {
@@ -2524,12 +2636,12 @@ function renderMessageContent(msg) {
         `;
     }
 
-    if (!msg.file_url) {
-        return html;
-    }
+    if (!msg.file_url) return html;
 
-    const ext = getExt(msg.file_url);
+    const url = msg.file_url;
+    if (!safeUrl(url)) return html;
 
+    const ext = getExt(url);
     let type = findFileType(ext);
 
     if (type === "unknown") {
@@ -2537,34 +2649,29 @@ function renderMessageContent(msg) {
     }
 
     switch (type) {
-
         case "image":
-            html += createImagePreview(msg.file_url);
+            html += createImagePreview(url);
             break;
 
         case "video":
-            html += createVideoPreview(msg.file_url);
+            html += createVideoPreview(url);
             break;
 
         case "audio":
-            html += createAudioPreview(msg.file_url);
+            html += createAudioPreview(url);
             break;
 
         case "pdf":
             html += `
-                <a
-                    href="#"
-                    onclick="openPreview('${escapeHTML(msg.file_url)}','pdf')">
+                <button onclick="openPreview('${escapeHTML(url)}','pdf')">
                     PDFを表示
-                </a>
+                </button>
             `;
             break;
 
         default:
             html += `
-                <a
-                    href="${escapeHTML(msg.file_url)}"
-                    target="_blank">
+                <a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer">
                     ファイルを開く
                 </a>
             `;
@@ -2573,306 +2680,180 @@ function renderMessageContent(msg) {
     return html;
 }
 
-/* =========================
-   モーダルプレビュー
-========================= */
-
 function openPreview(url, type) {
+    if (!safeUrl(url)) return;
 
     const handlers = {
         image: renderImage,
         video: renderVideo,
         audio: renderAudio,
-        pdf: renderPdf
+        pdf: renderPdf,
+        text: renderTextFile,
+        code: renderCode,
+        office: renderDownload,
+        archive: renderDownload
     };
 
     (handlers[type] || renderDownload)(url);
 }
 
 function renderImage(url) {
-
     Swal.fire({
         width: 900,
-
-        html: `
-            <img
-                src="${escapeHTML(url)}"
-                style="
-                    max-width:100%;
-                    max-height:80vh;
-                    border-radius:12px;
-                ">
-        `,
-
+        html: `<img src="${escapeHTML(url)}" style="max-width:100%;max-height:80vh;">`,
         showConfirmButton: false
     });
 }
 
 function renderVideo(url) {
-
     Swal.fire({
-        width: 950,
-
+        width: 900,
         html: `
-            <video
-                controls
-                autoplay
-                style="
-                    width:100%;
-                    max-height:80vh;
-                    border-radius:12px;
-                    background:#000;
-                ">
+            <video controls autoplay style="width:100%;max-height:80vh;">
                 <source src="${escapeHTML(url)}">
             </video>
         `,
-
         showConfirmButton: false
     });
 }
 
 function renderAudio(url) {
-
     Swal.fire({
         width: 600,
-
         html: `
-            <audio
-                controls
-                autoplay
-                style="width:100%">
+            <audio controls autoplay style="width:100%">
                 <source src="${escapeHTML(url)}">
             </audio>
         `,
-
         showConfirmButton: false
     });
 }
 
 function renderPdf(url) {
+    if (!safeUrl(url)) return;
 
     Swal.fire({
         width: "90%",
-
         html: `
-            <iframe
-                src="${escapeHTML(url)}"
-                style="
-                    width:100%;
-                    height:80vh;
-                    border:none;
-                    border-radius:12px;
-                ">
+            <iframe src="${escapeHTML(url)}"
+                    style="width:100%;height:80vh;border:none;">
             </iframe>
         `,
-
         showConfirmButton: false
     });
 }
 
-/* =========================
-   テキスト読み込み
-========================= */
-
 async function fetchText(url) {
+    if (!safeUrl(url)) throw new Error("invalid url");
 
     const res = await fetch(url);
 
-    if (!res.ok) {
-        throw new Error(`読み込み失敗 (${res.status})`);
+    const len = Number(res.headers.get("content-length") || 0);
+    if (len > 2_000_000) {
+        throw new Error("file too large");
     }
+
+    if (!res.ok) throw new Error("fetch failed");
 
     return await res.text();
 }
 
 async function renderTextFile(url, title = "テキスト") {
-
     const text = await fetchText(url);
 
     Swal.fire({
-        width: 950,
-
+        width: 900,
         title,
-
-        html: `
-            <pre style="
-                text-align:left;
-                max-height:75vh;
-                overflow:auto;
-                background:#111;
-                color:#eee;
-                padding:18px;
-                border-radius:12px;
-                white-space:pre-wrap;
-                word-break:break-word;
-            ">${escapeHTML(text)}</pre>
-        `,
-
+        html: `<pre>${escapeHTML(text)}</pre>`,
         showConfirmButton: false
     });
 }
 
-/* =========================
-   コード表示
-========================= */
-
 async function renderCode(url) {
-
     const text = await fetchText(url);
 
     Swal.fire({
         width: 1000,
-
         html: `
-            <pre style="
-                text-align:left;
-                max-height:75vh;
-                overflow:auto;
-                border-radius:12px;
-            ">
-                <code id="codeBlock">
-${escapeHTML(text)}
-                </code>
-            </pre>
+            <pre><code id="codeBlock">${escapeHTML(text.slice(0, 200000))}</code></pre>
         `,
-
         showConfirmButton: false,
-
         didOpen: () => {
-
             if (window.hljs) {
-
-                hljs.highlightElement(
-                    document.getElementById("codeBlock")
-                );
+                hljs.highlightElement(document.getElementById("codeBlock"));
             }
         }
     });
 }
 
-/* =========================
-   CSV
-========================= */
-
 async function renderCSV(url) {
-
     const text = await fetchText(url);
 
-    const rows = text
-        .split(/\r?\n/)
-        .filter(Boolean)
-        .slice(0, 100)
-        .map(row => row.split(","));
+    const rows = text.split(/\r?\n/).slice(0, 100).map(r => r.split(","));
 
     Swal.fire({
-        width: 1000,
-
+        width: 900,
         html: `
-            <div style="
-                max-height:75vh;
-                overflow:auto;
-            ">
-                <table class="table table-bordered table-sm">
-                    ${rows.map(row => `
-                        <tr>
-                            ${row.map(cell => `
-                                <td>${escapeHTML(cell)}</td>
-                            `).join("")}
-                        </tr>
-                    `).join("")}
-                </table>
-            </div>
+            <table>
+                ${rows.map(r => `
+                    <tr>
+                        ${r.map(c => `<td>${escapeHTML(c)}</td>`).join("")}
+                    </tr>
+                `).join("")}
+            </table>
         `,
-
         showConfirmButton: false
     });
 }
 
-/* =========================
-   XLSX
-========================= */
-
 async function renderXlsx(url) {
-
     const res = await fetch(url);
 
     const buf = await res.arrayBuffer();
 
-    const wb = XLSX.read(buf, {
-        type: "array"
-    });
+    const wb = XLSX.read(buf, { type: "array" });
 
     const sheet = wb.Sheets[wb.SheetNames[0]];
 
-    const rows = XLSX.utils
-        .sheet_to_json(sheet, {
-            header: 1
-        })
-        .slice(0, 100);
+    const rows = XLSX.utils.sheet_to_json(sheet, {
+        header: 1
+    }).slice(0, 100);
 
     Swal.fire({
-        width: 1000,
-
+        width: 900,
         html: `
-            <div style="
-                max-height:75vh;
-                overflow:auto;
-            ">
-                <table class="table table-bordered table-sm">
-                    ${rows.map(row => `
-                        <tr>
-                            ${row.map(cell => `
-                                <td>
-                                    ${escapeHTML(String(cell ?? ""))}
-                                </td>
-                            `).join("")}
-                        </tr>
-                    `).join("")}
-                </table>
-            </div>
+            <table>
+                ${rows.map(r => `
+                    <tr>
+                        ${r.map(c => `<td>${escapeHTML(String(c ?? ""))}</td>`).join("")}
+                    </tr>
+                `).join("")}
+            </table>
         `,
-
         showConfirmButton: false
     });
 }
 
-/* =========================
-   DOCX
-========================= */
-
 async function renderDocx(url) {
-
     const res = await fetch(url);
-
     const buf = await res.arrayBuffer();
 
     const result = await mammoth.convertToHtml({
         arrayBuffer: buf
     });
 
+    const clean = window.DOMPurify
+        ? DOMPurify.sanitize(result.value)
+        : escapeHTML(result.value);
+
     Swal.fire({
-        width: 1000,
-
-        html: `
-            <div style="
-                text-align:left;
-                max-height:75vh;
-                overflow:auto;
-            ">
-                ${result.value}
-            </div>
-        `,
-
+        width: 900,
+        html: `<div style="text-align:left">${clean}</div>`,
         showConfirmButton: false
     });
 }
 
-/* =========================
-   ZIP
-========================= */
-
 async function renderZip(url) {
-
     const res = await fetch(url);
 
     const blob = await res.blob();
@@ -2882,148 +2863,62 @@ async function renderZip(url) {
     const files = [];
 
     zip.forEach((path, file) => {
-
-        if (!file.dir) {
+        if (!file.dir && files.length < 500) {
             files.push(path);
         }
     });
 
     Swal.fire({
         width: 700,
-
-        html: `
-            <div style="
-                text-align:left;
-                max-height:70vh;
-                overflow:auto;
-            ">
-                ${files.map(file => `
-                    <div style="padding:6px 0">
-                        ${escapeHTML(file)}
-                    </div>
-                `).join("")}
-            </div>
-        `,
-
+        html: files.map(f => `<div>${escapeHTML(f)}</div>`).join(""),
         showConfirmButton: false
     });
 }
 
-/* =========================
-   ダウンロード
-========================= */
-
 function renderDownload(url, title = "ファイル") {
+    if (!safeUrl(url)) return;
 
     Swal.fire({
         title,
-
         html: `
-            <a
-                href="${escapeHTML(url)}"
-                target="_blank"
-                class="btn btn-primary">
-                開く / ダウンロード
+            <a href="${escapeHTML(url)}"
+               target="_blank"
+               rel="noopener noreferrer">
+               開く
             </a>
         `,
-
         showConfirmButton: false
     });
 }
 
-/* =========================
-   メイン
-========================= */
 
 async function loadFile(url) {
-
     try {
+        if (!safeUrl(url)) throw new Error("invalid url");
 
         const ext = getExt(url);
-
         let type = findFileType(ext);
 
         if (type === "unknown") {
-
             const mime = await getMimeType(url);
-
             type = getTypeFromMime(mime);
         }
 
         const handlers = {
-
             image: () => renderImage(url),
-
             video: () => renderVideo(url),
-
             audio: () => renderAudio(url),
-
             pdf: () => renderPdf(url),
-
-            text: async () => {
-
-                if (ext === "csv") {
-                    return renderCSV(url);
-                }
-
-                return renderTextFile(url);
-            },
-
-            code: async () => {
-                return renderCode(url);
-            },
-
-            office: async () => {
-
-                if (
-                    ["xlsx", "xls", "xlsm"].includes(ext)
-                ) {
-                    return renderXlsx(url);
-                }
-
-                if (ext === "docx") {
-                    return renderDocx(url);
-                }
-
-                return renderDownload(
-                    url,
-                    "Officeファイル"
-                );
-            },
-
-            archive: async () => {
-
-                if (ext === "zip") {
-                    return renderZip(url);
-                }
-
-                return renderDownload(
-                    url,
-                    "圧縮ファイル"
-                );
-            },
-
-            unknown: () => {
-                window.open(url, "_blank");
-            }
+            text: () => renderTextFile(url),
+            code: () => renderCode(url),
+            office: () => renderDownload(url, "office"),
+            archive: () => renderDownload(url, "archive"),
+            unknown: () => window.open(url, "_blank", "noopener")
         };
 
-        const handler =
-            handlers[type] ||
-            handlers.unknown;
+        await (handlers[type] || handlers.unknown)();
 
-        await handler();
-
-    } catch (err) {
-
-        console.error(err);
-
-        Swal.fire({
-            icon: "error",
-            title: "エラー",
-            text:
-                err?.message ||
-                "ファイルを開けませんでした"
-        });
+    } catch (e) {
+        Swal.fire("エラー", e.message, "error");
     }
 }
