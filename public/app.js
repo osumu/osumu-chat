@@ -2561,8 +2561,6 @@ function findFileType(ext) {
     return "unknown";
 }
 
-const mimeCache = new Map();
-
 async function getMimeType(url) {
     if (mimeCache.has(url)) return mimeCache.get(url);
 
