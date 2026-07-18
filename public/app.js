@@ -2524,7 +2524,7 @@ function nl2br(str = "") {
     return escapeHTML(str).replace(/\n/g, "<br>");
 }
 
-function safeURL(url) {
+function safeUrl(url) {
     try {
         const u = new URL(url);
 
