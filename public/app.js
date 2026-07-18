@@ -896,24 +896,30 @@ async function loadMessages() {
         }
 
         html += `
-    <div class="msg-row ${isMe ? "me" : "you"}">
-        ${!isMe ? `<div class="avatar-inline">${avatar} </div>` : ""}
-        <div class="${bubbleClass}">
-            ${body}
-            <div class="meta-row">
-                <div class="meta">
-                    ${formatDate(m.created_at)}
+    <div class="msg-row ${isMe ? "me" : "you"}" style="display: flex; flex-direction: column; align-items: ${isMe ? 'flex-end' : 'flex-start'}; width: 100%; margin-bottom: 12px; padding: 0 8px;">
+        
+        <div style="display: flex; align-items: flex-start; gap: 8px; max-width: 80%; justify-content: ${isMe ? 'flex-end' : 'flex-start'};">
+            ${!isMe ? `<div class="avatar-inline" style="flex-shrink: 0;">${avatar}</div>` : ""}
+            
+            <div class="${bubbleClass}" style="width: fit-content; max-width: 100%; word-break: break-all;">
+                ${body}
+                <div class="meta-row">
+                    <div class="meta">
+                        ${formatDate(m.created_at)}
+                    </div>
+                    ${isMe ? `
+                        <div class="read-status" style="font-size:10px; text-align:left;">
+                            ${Array.isArray(m.read_by) && m.read_by.filter(v => v !== user.id).length > 0
+                                ? `<span style="color:green">✓</span> ${m.read_by.filter(v => v !== user.id).length}`
+                                : `<span style="color:red">✕</span>`
+                            }
+                        </div>
+                    ` : ""}
                 </div>
-                ${isMe ? `<div class="read-status" style="font-size:10px;text-align:left;">
-                            ${Array.isArray(m.read_by) &&
-                    m.read_by.filter(v => v !== user.id).length > 0
-                    ? `<span style="color:green">✓</span> ${m.read_by.filter(v => v !== user.id).length}`
-                    : `<span style="color:red">✕</span>`
-                }</div>`
-                : ""}
             </div>
+        </div>
 
-        </div> <div class="msg-reactions" style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; margin-left: ${isMe ? 'auto' : '0'}; align-items: center; width: 100%;">
+        <div class="msg-reactions" style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; padding-left: ${isMe ? '0' : '48px'}; justify-content: ${isMe ? 'flex-end' : 'flex-start'}; width: auto; max-width: 80%;">
             ${Object.entries(grouped)
                 .map(([emoji, users]) => {
                     const reacted = users.includes(user.id);
@@ -947,7 +953,6 @@ async function loadMessages() {
     box.scrollTop = box.scrollHeight;
     setupEmojiPickers();
 }
-
 function setupEmojiPickers() {
     document.querySelectorAll(".reaction-add-btn").forEach(btn => {
         const messageId = btn.id.replace("reaction-btn-", "");
@@ -966,7 +971,7 @@ function setupEmojiPickers() {
 
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            picker.togglePicker(btn);
+            picker.showPicker(btn);
         });
     });
 }
