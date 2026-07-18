@@ -206,9 +206,6 @@ async function applyIcon(force = false) {
 }
 
 
-
-// プロフィール
-
 async function ensureProfile() {
     const username = localStorage.getItem("username") || "user";
 
@@ -835,9 +832,6 @@ function backList() {
     window.currentRoom = null;
 }
 
-
-// メッセージ一覧
-
 async function loadMessages() {
     if (!window.currentRoom) return;
 
@@ -869,9 +863,7 @@ async function loadMessages() {
             if (!acc[r.emoji]) {
                 acc[r.emoji] = [];
             }
-
             acc[r.emoji].push(r.user_id);
-
             return acc;
         }, {});
 
@@ -905,116 +897,45 @@ async function loadMessages() {
 
         html += `
     <div class="msg-row ${isMe ? "me" : "you"}">
-
-        ${!isMe
-                ? `
-                <div class="avatar-inline">
-                    ${avatar}
-                </div>
-            `
-                : ""}
-
+        ${!isMe ? `<div class="avatar-inline">${avatar} </div>` : ""}
         <div class="${bubbleClass}">
-
             ${body}
-
-            <!-- リアクション -->
-            <div class="msg-reactions">
-
-                ${Object.entries(grouped)
-                .map(([emoji, users]) => {
-
-                    const reacted =
-                        users.includes(user.id);
-
-                    return `
-                            <button
-                                class="reaction-chip ${reacted ? "active" : ""}"
-                                onclick="
-                                    (async()=>{
-
-                                        const { data: msg } =
-                                            await client
-                                                .from('messages')
-                                                .select('reactions')
-                                                .eq('id','${m.id}')
-                                                .single();
-
-                                        let reactions =
-                                            Array.isArray(msg?.reactions)
-                                                ? [...msg.reactions]
-                                                : [];
-
-                                        const index =
-                                            reactions.findIndex(v =>
-                                                v.user_id === user.id &&
-                                                v.emoji === '${emoji}'
-                                            );
-
-                                        if(index >= 0){
-
-                                            reactions.splice(index,1);
-
-                                        }else{
-
-                                            reactions.push({
-                                                user_id:user.id,
-                                                emoji:'${emoji}'
-                                            });
-                                        }
-
-                                        await client
-                                            .from('messages')
-                                            .update({
-                                                reactions
-                                            })
-                                            .eq('id','${m.id}');
-
-                                        loadMessages();
-
-                                    })()
-                                "
-                            >
-                                ${emoji}
-                                <span>${users.length}</span>
-                            </button>
-                        `;
-                })
-                .join("")}
-
-                <button
-                    class="reaction-add-btn"
-                    id="reaction-btn-${m.id}"
-                >
-                    😊
-                </button>
-
-            </div>
-
-            <!-- 下部 -->
             <div class="meta-row">
-
                 <div class="meta">
                     ${formatDate(m.created_at)}
                 </div>
-
-                ${isMe
-                ? `
-                        <div class="read-status">
+                ${isMe ? `<div class="read-status" style="font-size:10px;text-align:left;">
                             ${Array.isArray(m.read_by) &&
                     m.read_by.filter(v => v !== user.id).length > 0
-                    ? `既読 ${m.read_by.filter(v => v !== user.id).length
-                    }`
-                    : "未読"
-                }
-                        </div>
-                    `
+                    ? `<span style="color:green">✓</span> ${m.read_by.filter(v => v !== user.id).length}`
+                    : `<span style="color:red">✕</span>`
+                }</div>`
                 : ""}
-
             </div>
 
-        </div>
+        </div> <div class="msg-reactions" style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; margin-left: ${isMe ? 'auto' : '0'}; align-items: center; width: 100%;">
+            ${Object.entries(grouped)
+                .map(([emoji, users]) => {
+                    const reacted = users.includes(user.id);
+                    return `
+                    <button
+                        class="reaction-chip ${reacted ? "active" : ""}"
+                        style="padding: 2px 8px; font-size: 0.85rem; border-radius: 12px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid #ddd; background: #fff; cursor: pointer;"
+                        onclick="toggleReaction('${m.id}', '${escapeHTML(emoji)}')"
+                    >
+                        <span>${emoji}</span>
+                        <span style="font-size: 0.75rem; color: #666; font-weight: bold;">${users.length}</span>
+                    </button>
+                `;
+                })
+                .join("")}
 
+            <button
+                class="reaction-add-btn"
+                id="reaction-btn-${m.id}"
+                style="padding: 2px 8px; font-size: 0.75rem; border-radius: 12px; border: 1px dashed #ccc; background: transparent; cursor: pointer; color: #666;"
+            >😊</button>
+        </div>
     </div>
 `;
 
@@ -1024,10 +945,72 @@ async function loadMessages() {
     const box = document.getElementById("messages");
     box.innerHTML = html;
     box.scrollTop = box.scrollHeight;
+    setupEmojiPickers();
 }
 
+function setupEmojiPickers() {
+    document.querySelectorAll(".reaction-add-btn").forEach(btn => {
+        const messageId = btn.id.replace("reaction-btn-", "");
 
-// 一括既読
+        if (btn.dataset.pickerInitialized) return;
+        btn.dataset.pickerInitialized = "true";
+
+        const picker = new EmojiButton({
+            position: 'auto',
+            autoHide: true
+        });
+
+        picker.on('emoji', selection => {
+            toggleReaction(messageId, selection);
+        });
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            picker.togglePicker(btn);
+        });
+    });
+}
+
+async function toggleReaction(messageId, emoji) {
+    try {
+        const { data: msg, error: fetchError } = await client
+            .from('messages')
+            .select('reactions')
+            .eq('id', messageId)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        let reactions = Array.isArray(msg?.reactions) ? [...msg.reactions] : [];
+
+        const index = reactions.findIndex(v =>
+            v.user_id === user.id && v.emoji === emoji
+        );
+
+        if (index >= 0) {
+            reactions.splice(index, 1);
+        } else {
+            reactions.push({
+                user_id: user.id,
+                emoji: emoji
+            });
+        }
+
+        const { error: updateError } = await client
+            .from('messages')
+            .update({ reactions })
+            .eq('id', messageId);
+
+        if (updateError) throw updateError;
+        await loadMessages();
+
+    } catch (e) {
+        console.error("リアクションの切り替えに失敗しました:", e);
+        if (typeof swalError === "function") {
+            swalError("リアクション処理に失敗しました");
+        }
+    }
+}
 
 async function markAsReadBatch() {
     const { error } = await client.rpc("mark_messages_read", {
@@ -1148,6 +1131,8 @@ function appendMessage(msg) {
         "beforeend",
         renderMessageHTML(msg)
     );
+
+    setupEmojiPickers();
 }
 
 function updateMessage(msg) {
@@ -2560,6 +2545,8 @@ function findFileType(ext) {
     }
     return "unknown";
 }
+
+const mimeCache = new Map();
 
 async function getMimeType(url) {
     if (mimeCache.has(url)) return mimeCache.get(url);
